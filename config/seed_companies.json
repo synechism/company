@@ -1,0 +1,28 @@
+[
+  {
+    "id": "jLGYRBCCSSh08ZciNdJN1AFXLWOv",
+    "name": "tate",
+    "website": "tateinc.com",
+    "url": "https://tateinc.com",
+    "industry": "construction",
+    "size": "201-500",
+    "country": "united states",
+    "region": "maryland",
+    "locality": "columbia",
+    "linkedinUrl": "linkedin.com/company/tate-access-floors",
+    "founded": 1963
+  },
+  {
+    "id": "seed-smtc",
+    "name": "smtc corporation",
+    "website": "smtc.com",
+    "url": "https://smtc.com",
+    "industry": "electrical/electronic manufacturing",
+    "size": "1001-5000",
+    "country": "united states",
+    "region": "florida",
+    "locality": "melbourne",
+    "linkedinUrl": "linkedin.com/company/smtc",
+    "founded": 1985
+  }
+]
