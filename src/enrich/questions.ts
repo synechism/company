@@ -1,4 +1,4 @@
-import type { CompanyEnrichment, EnrichmentAnswer, EnrichmentQuestionKey } from "../types.js";
+import type { CompanyEnrichment, EnrichmentAnswer, EnrichmentQuestionKey, TargetAlignment } from "../types.js";
 
 export const ENRICHMENT_QUESTIONS: Record<EnrichmentQuestionKey, string> = {
   supplies_datacenters:
@@ -42,6 +42,69 @@ const answerSchema = {
   additionalProperties: false,
 } as const;
 
+const targetAlignmentSchema = {
+  type: "object",
+  properties: {
+    score: {
+      type: "number",
+      minimum: 0,
+      maximum: 100,
+      description:
+        "Overall fit score from 0 to 100 for the target profile. 90+ is an obvious fit, 70-89 is strong, 50-69 is possible, below 50 is weak.",
+    },
+    priority: {
+      type: "string",
+      enum: ["high", "medium", "low", "not_relevant"],
+      description: "Recommended research/sales priority based on the target profile.",
+    },
+    best_fit_categories: {
+      type: "array",
+      items: {
+        type: "string",
+        enum: [
+          "switchgear_transformers_busway",
+          "electrical_mechanical_contractors",
+          "structural_steel_precast_sitework",
+          "generators_backup_power_bess_fuel_cells_microgrids",
+          "cooling_thermal_management",
+          "modular_construction_gc_mep_commissioning",
+          "cabling_connectivity",
+          "racks_enclosures_containment",
+          "building_management_dcim",
+          "fire_suppression",
+          "physical_security",
+          "none",
+        ],
+      },
+      description: "One or more PDF target categories that best match the company, or none.",
+    },
+    reason: {
+      type: "string",
+      description:
+        "A concise explanation of why the company is or is not aligned with the PDF target profile, grounded in website evidence.",
+    },
+    positive_evidence: {
+      type: "array",
+      items: { type: "string" },
+      description: "Short evidence snippets supporting target fit.",
+    },
+    negative_evidence: {
+      type: "array",
+      items: { type: "string" },
+      description: "Short evidence snippets or caveats weakening target fit.",
+    },
+  },
+  required: [
+    "score",
+    "priority",
+    "best_fit_categories",
+    "reason",
+    "positive_evidence",
+    "negative_evidence",
+  ],
+  additionalProperties: false,
+} as const;
+
 export const enrichmentSchema = {
   type: "object",
   properties: {
@@ -54,6 +117,7 @@ export const enrichmentSchema = {
     high_volume_or_high_mix: answerSchema,
     large_procurement_team: answerSchema,
     turnkey_contract_manufacturer: answerSchema,
+    target_alignment: targetAlignmentSchema,
     final_notes: {
       type: "string",
       description: "Any caveats, missing evidence, or notes about pages that should be checked manually.",
@@ -66,6 +130,7 @@ export const enrichmentSchema = {
     "high_volume_or_high_mix",
     "large_procurement_team",
     "turnkey_contract_manufacturer",
+    "target_alignment",
     "final_notes",
   ],
   additionalProperties: false,
@@ -85,9 +150,18 @@ Answer these five questions independently:
 4. ${ENRICHMENT_QUESTIONS.large_procurement_team}
 5. ${ENRICHMENT_QUESTIONS.turnkey_contract_manufacturer}
 
+Then score target_alignment for this specific target profile:
+- We are looking for US mid-market companies that are meaningfully involved in data center buildout or the supply chain for data center equipment/infrastructure.
+- Highest priority categories: switchgear, transformers, busway, electrical contractors, mechanical contractors, structural steel, precast concrete, and site development.
+- Strong additional categories: generators, backup power, battery energy storage, fuel cells, microgrids, cooling, thermal management, modular data center construction, general contractors, MEP engineering, and commissioning.
+- Useful lower-priority categories: cabling/connectivity, racks/enclosures/containment, building management/DCIM, fire suppression, and physical security.
+- Prefer companies that manufacture equipment, own factories, do high-volume/high-mix production, manage complex procurement/sourcing, or provide turnkey contract manufacturing.
+- Penalize generic consultants, purely residential/local contractors, distributors/resellers with no manufacturing or buildout role, unrelated electronics/software firms, and companies with no evidence of data center or critical infrastructure relevance.
+
 Important rules:
 - This is enrichment, not filtering. Do not reject or rank the company.
 - For each question return answer yes/no/unknown, confidence, reason, and evidence.
+- For target_alignment, do rank the company against the target profile on a 0-100 scale.
 - Use "unknown" when the website page does not explicitly provide enough evidence.
 - Large procurement team is usually inferential; use yes only when there are strong signals like many facilities, large-scale operations, global sourcing, supplier portals, procurement careers, extensive manufacturing footprint, or explicit procurement/supply-chain language.
 - Turnkey contract manufacturer means end-to-end outsourced manufacturing for customers, not just construction, consulting, distribution, installation, or selling own products.
@@ -102,6 +176,14 @@ export function emptyEnrichment(error: string): CompanyEnrichment {
     reason: error,
     evidence: [],
   };
+  const targetAlignment: TargetAlignment = {
+    score: 0,
+    priority: "not_relevant",
+    best_fit_categories: ["none"],
+    reason: error,
+    positive_evidence: [],
+    negative_evidence: [],
+  };
   return {
     company_summary: "",
     supplies_datacenters: answer,
@@ -109,6 +191,7 @@ export function emptyEnrichment(error: string): CompanyEnrichment {
     high_volume_or_high_mix: answer,
     large_procurement_team: answer,
     turnkey_contract_manufacturer: answer,
+    target_alignment: targetAlignment,
     final_notes: error,
   };
 }

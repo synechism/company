@@ -1,3 +1,4 @@
+import "dotenv/config";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
@@ -18,7 +19,11 @@ const program = new Command()
   .option("--offset <n>", "Skip this many candidates before enriching", parseIntArg, 0)
   .option("--concurrency <n>", "Parallel Firecrawl requests", parseIntArg, Number(process.env.CRAWL_CONCURRENCY ?? 2))
   .option("--timeout-ms <n>", "Per-company Firecrawl timeout", parseIntArg, 120_000)
+  .option("--cache-dir <path>", "Optional Firecrawl filesystem cache root")
+  .option("--force-refresh", "Bypass cached Firecrawl payloads", false)
   .option("--website <host...>", "Only enrich candidates matching these websites/domains")
+  .option("--resume", "Keep existing output JSONL and skip source ids already present", false)
+  .option("--progress-every <n>", "Log progress every N completed companies", parseIntArg, 25)
   .parse(process.argv);
 
 const options = program.opts<{
@@ -30,16 +35,23 @@ const options = program.opts<{
   offset: number;
   concurrency: number;
   timeoutMs: number;
+  cacheDir?: string;
+  forceRefresh: boolean;
   website?: string[];
+  resume: boolean;
+  progressEvery: number;
 }>();
 
 if (!process.env.FIRECRAWL_API_KEY) {
   throw new Error("FIRECRAWL_API_KEY is required");
 }
 
-await fsp.rm(options.output, { force: true });
-await fsp.rm(options.summary, { force: true });
-if (options.csvOutput) await fsp.rm(options.csvOutput, { force: true });
+const completedIds = options.resume ? await readCompletedIds(options.output) : new Set<string>();
+if (!options.resume) {
+  await fsp.rm(options.output, { force: true });
+  await fsp.rm(options.summary, { force: true });
+  if (options.csvOutput) await fsp.rm(options.csvOutput, { force: true });
+}
 await fsp.mkdir(path.dirname(options.output), { recursive: true });
 await fsp.mkdir(path.dirname(options.summary), { recursive: true });
 
@@ -47,6 +59,7 @@ const candidates = await readCandidates(options.input, {
   limit: options.limit,
   offset: options.offset,
   websites: options.website,
+  completedIds,
 });
 if (candidates.length === 0) {
   throw new Error(`No candidates selected from ${options.input}`);
@@ -55,6 +68,8 @@ if (candidates.length === 0) {
 const started = Date.now();
 const limit = pLimit(options.concurrency);
 const results: EnrichedCompany[] = [];
+let completed = 0;
+let errorCount = 0;
 
 await Promise.all(
   candidates.map((company) =>
@@ -63,9 +78,24 @@ await Promise.all(
         apiKey: process.env.FIRECRAWL_API_KEY as string,
         outputDir: path.dirname(options.output),
         timeoutMs: options.timeoutMs,
+        cacheDir: options.cacheDir,
+        forceRefresh: options.forceRefresh,
       });
       results.push(result);
+      completed += 1;
+      if (result.agent_metadata.error) errorCount += 1;
       await appendJsonl(options.output, result);
+      if (options.progressEvery > 0 && (completed % options.progressEvery === 0 || completed === candidates.length)) {
+        const elapsedSec = (Date.now() - started) / 1000;
+        const rate = completed / Math.max(1, elapsedSec);
+        const remaining = candidates.length - completed;
+        const etaMin = remaining / Math.max(0.001, rate) / 60;
+        console.error(
+          `enriched ${completed}/${candidates.length} errors=${errorCount} rate=${rate.toFixed(
+            2,
+          )}/s eta=${etaMin.toFixed(1)}m`,
+        );
+      }
     }),
   ),
 );
@@ -80,7 +110,7 @@ console.log(JSON.stringify(summary, null, 2));
 
 async function readCandidates(
   pathname: string,
-  readOptions: { limit?: number; offset: number; websites?: string[] },
+  readOptions: { limit?: number; offset: number; websites?: string[]; completedIds: Set<string> },
 ): Promise<CandidateCompany[]> {
   const wantedHosts = new Set((readOptions.websites ?? []).map(hostKey));
   const stream = fs.createReadStream(pathname, "utf8");
@@ -91,6 +121,7 @@ async function readCandidates(
   for await (const line of rl) {
     if (!line.trim()) continue;
     const candidate = JSON.parse(line) as CandidateCompany;
+    if (readOptions.completedIds.has(candidate.id)) continue;
     if (wantedHosts.size > 0 && !wantedHosts.has(hostKey(candidate.url || candidate.website))) {
       continue;
     }
@@ -103,6 +134,23 @@ async function readCandidates(
   }
 
   return rows;
+}
+
+async function readCompletedIds(pathname: string): Promise<Set<string>> {
+  const ids = new Set<string>();
+  if (!fs.existsSync(pathname)) return ids;
+  const stream = fs.createReadStream(pathname, "utf8");
+  const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+  for await (const line of rl) {
+    if (!line.trim()) continue;
+    try {
+      const row = JSON.parse(line) as EnrichedCompany;
+      if (row.source_row?.id) ids.add(row.source_row.id);
+    } catch {
+      // Ignore a partial trailing line from an interrupted append.
+    }
+  }
+  return ids;
 }
 
 async function writeCsv(pathname: string, rows: EnrichedCompany[]): Promise<void> {
@@ -135,6 +183,12 @@ async function writeCsv(pathname: string, rows: EnrichedCompany[]): Promise<void
     "turnkey_contract_manufacturer_answer",
     "turnkey_contract_manufacturer_confidence",
     "turnkey_contract_manufacturer_reason",
+    "target_alignment_score",
+    "target_alignment_priority",
+    "target_alignment_categories",
+    "target_alignment_reason",
+    "target_alignment_positive_evidence",
+    "target_alignment_negative_evidence",
     "final_notes",
     "elapsed_ms",
     "error",
@@ -166,6 +220,12 @@ function csvValue(
   if (column in source) return source[column as keyof typeof source];
   if (column === "final_url") return row.agent_metadata.final_url;
   if (column === "company_summary") return enrichment.company_summary;
+  if (column === "target_alignment_score") return enrichment.target_alignment?.score;
+  if (column === "target_alignment_priority") return enrichment.target_alignment?.priority;
+  if (column === "target_alignment_categories") return enrichment.target_alignment?.best_fit_categories?.join("; ");
+  if (column === "target_alignment_reason") return enrichment.target_alignment?.reason;
+  if (column === "target_alignment_positive_evidence") return enrichment.target_alignment?.positive_evidence?.join("; ");
+  if (column === "target_alignment_negative_evidence") return enrichment.target_alignment?.negative_evidence?.join("; ");
   if (column === "final_notes") return enrichment.final_notes;
   if (column === "elapsed_ms") return row.agent_metadata.elapsed_ms;
   if (column === "error") return row.agent_metadata.error;

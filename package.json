@@ -3,7 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "bin": {
+    "fcdx": "dist/cli/fcdx.js"
+  },
   "scripts": {
+    "build": "tsc",
+    "fcdx": "tsx src/cli/fcdx.ts",
     "profile": "tsx src/cli/profile.ts",
     "filter": "tsx src/cli/filter.ts",
     "check-domains": "tsx src/cli/check-domains.ts",
@@ -13,6 +18,7 @@
     "check": "tsc --noEmit"
   },
   "dependencies": {
+    "@duckdb/node-api": "^1.5.3-r.3",
     "@hyperbrowser/sdk": "^0.90.4",
     "commander": "^14.0.2",
     "csv-parse": "^6.1.0",

@@ -87,8 +87,18 @@ export type EnrichmentAnswer = {
   evidence: string[];
 };
 
+export type TargetAlignment = {
+  score: number;
+  priority: "high" | "medium" | "low" | "not_relevant";
+  best_fit_categories: string[];
+  reason: string;
+  positive_evidence: string[];
+  negative_evidence: string[];
+};
+
 export type CompanyEnrichment = Record<EnrichmentQuestionKey, EnrichmentAnswer> & {
   company_summary: string;
+  target_alignment: TargetAlignment;
   final_notes: string;
 };
 
