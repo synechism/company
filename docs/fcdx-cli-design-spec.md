@@ -229,6 +229,110 @@ CREATE TABLE crawl_artifacts (
 );
 ```
 
+### `missions`
+
+Mission workspaces for multi-step agent objectives.
+
+```sql
+CREATE TABLE missions (
+  id VARCHAR PRIMARY KEY,
+  name VARCHAR UNIQUE NOT NULL,
+  goal VARCHAR,
+  status VARCHAR,
+  default_rubric VARCHAR,
+  created_at TIMESTAMP,
+  updated_at TIMESTAMP,
+  closed_at TIMESTAMP
+);
+```
+
+### `mission_artifacts`
+
+Connect missions to lists, runs, snapshots, exports, review queues, and notes.
+
+```sql
+CREATE TABLE mission_artifacts (
+  mission_id VARCHAR,
+  artifact_type VARCHAR,
+  artifact_id VARCHAR,
+  role VARCHAR,
+  created_at TIMESTAMP,
+  PRIMARY KEY (mission_id, artifact_type, artifact_id)
+);
+```
+
+### `rubrics`
+
+Versioned enrichment/ranking rubrics.
+
+```sql
+CREATE TABLE rubrics (
+  id VARCHAR PRIMARY KEY,
+  name VARCHAR,
+  schema_version VARCHAR,
+  prompt_path VARCHAR,
+  schema_path VARCHAR,
+  scoring_json JSON,
+  status VARCHAR,
+  created_at TIMESTAMP
+);
+```
+
+### `review_queues` And `review_labels`
+
+Human-in-the-loop feedback and rubric evaluation data.
+
+```sql
+CREATE TABLE review_queues (
+  id VARCHAR PRIMARY KEY,
+  name VARCHAR UNIQUE,
+  source_type VARCHAR,
+  source_ref VARCHAR,
+  status VARCHAR,
+  created_at TIMESTAMP
+);
+
+CREATE TABLE review_labels (
+  queue_id VARCHAR,
+  company_id VARCHAR,
+  label VARCHAR,
+  reason VARCHAR,
+  reviewer VARCHAR,
+  created_at TIMESTAMP,
+  PRIMARY KEY (queue_id, company_id)
+);
+```
+
+### `account_packages`
+
+Generated sales research packages.
+
+```sql
+CREATE TABLE account_packages (
+  id VARCHAR PRIMARY KEY,
+  company_id VARCHAR,
+  list_id VARCHAR,
+  package_path VARCHAR,
+  included_sections JSON,
+  created_at TIMESTAMP
+);
+```
+
+### `snapshots`
+
+Frozen reproducible artifacts.
+
+```sql
+CREATE TABLE snapshots (
+  id VARCHAR PRIMARY KEY,
+  name VARCHAR UNIQUE,
+  artifact_type VARCHAR,
+  artifact_ref VARCHAR,
+  manifest_json JSON,
+  created_at TIMESTAMP
+);
+```
+
 ## Proposed Final `fcdx --help`
 
 The main discovery surface for agents should be `fcdx --help`. The help page
@@ -253,40 +357,57 @@ Global Options:
   -V, --version             Output version number.
 
 Core Workflow:
-  1. fcdx filter ...                         Find companies from the dataset.
-  2. fcdx list create/add ...                Save companies into durable lists.
-  3. fcdx enrich list ...                    Crawl websites and agent-enrich companies.
-  4. fcdx rank list ...                      Rank companies for Cronwell fit.
-  5. fcdx company explain ...                Audit why a company is a fit.
-  6. fcdx linkedin find-buyers ...           Find likely buyer contacts.
-  7. fcdx export list ...                    Export final account packages.
+  1. fcdx mission start ...                  Define the research objective.
+  2. fcdx discover ...                       Expand markets/categories into candidate pools.
+  3. fcdx list create/add ...                Save companies into durable lists.
+  4. fcdx enrich list ...                    Crawl websites and agent-enrich companies.
+  5. fcdx segment list ...                   Cluster/organize companies by market/category.
+  6. fcdx rank list ...                      Rank companies for Cronwell fit.
+  7. fcdx review queue ...                   Human/agent review uncertain cases.
+  8. fcdx account build ...                  Build account dossiers and buyer maps.
+  9. fcdx export list ...                    Export final account packages.
 
 Commands:
   db                         Manage the DuckDB dataset/cache.
+  mission                    Manage goal-oriented agent research workspaces.
+  discover                   Discover candidate pools from markets, keywords, and examples.
   filter                     Search/filter companies from the dataset.
   list                       Create and manage durable company lists.
+  segment                    Cluster and split lists into useful market/account segments.
   tag                        Add, remove, and inspect company tags.
   note                       Add and inspect company notes.
   enrich                     Crawl and agent-enrich companies.
+  rubric                     Manage scoring rubrics, schema versions, and eval sets.
   rank                       Rank enriched companies for Cronwell fit.
+  review                     Create review queues, capture labels, and adjudicate edge cases.
   company                    Inspect one company, its evidence, tags, lists, and cache.
+  evidence                   Search and quote website/enrichment evidence.
+  account                    Build account dossiers, buyer maps, and pitch packages.
   cache                      Inspect and manage Firecrawl cache artifacts.
   linkedin                   Authenticate LinkedIn and find buyer profiles.
   run                        Inspect, resume, and manage long-running jobs.
   profile                    Manage saved filter/enrichment/ranking profiles.
+  sql                        Run safe read-only SQL over the FCD-X DuckDB.
+  snapshot                   Freeze, diff, and reproduce list/ranking states.
+  integration                Import/export/sync with CSV, CRM, and external systems.
   export                     Export lists, enrichments, buyers, and evidence.
   target                     Compare and rank against PDF target categories.
 
 Examples:
   fcdx db status
-  fcdx filter --profile midmarket-us --industry "electrical/electronic manufacturing"
+  fcdx mission start dc-procurement --goal "Find 200 manufacturer/procurement-heavy targets"
+  fcdx discover category "thermal management for data centers" --seed "Vertiv" --seed "CoolIT"
   fcdx list create thermal-cooling --description "Cooling and thermal targets"
   fcdx list add thermal-cooling --from-filter --query "cooling OR thermal OR chiller"
   fcdx enrich list thermal-cooling --profile cronwell-manufacturing-procurement --concurrency 50 --resume
+  fcdx segment list thermal-cooling --by category,manufacturing_fit,procurement_fit
   fcdx rank list thermal-cooling --min-manufacturing-fit 65 --min-procurement-fit 65 --top 50
+  fcdx review queue thermal-cooling --where "score BETWEEN 55 AND 75"
   fcdx company explain "SMTC"
+  fcdx evidence search --company "SMTC" --query "supply chain manufacturing facilities"
   fcdx linkedin find-buyers --company "SMTC" --roles procurement,supply-chain,operations
-  fcdx export list thermal-cooling --format csv --include companies,enrichment,buyers,tags
+  fcdx account build --company "SMTC" --include evidence,buyers,pitch
+  fcdx export list thermal-cooling --format csv --include companies,enrichment,buyers,tags,account
 ```
 
 ### `fcdx db --help`
@@ -340,6 +461,58 @@ Examples:
   fcdx filter --tag buyer:manufacturer --tag procurement:complex --json
 ```
 
+### `fcdx mission --help`
+
+```text
+Usage: fcdx mission [options] [command]
+
+Create and manage goal-oriented research workspaces. A mission ties together
+lists, runs, rubrics, review queues, snapshots, and exports for one business
+objective.
+
+Commands:
+  start <name>               Start a mission with a concrete goal.
+  status <name>              Show mission progress, artifacts, blockers, next actions.
+  plan <name>                Generate or update a step-by-step research plan.
+  artifacts <name>           List lists, runs, rankings, exports, and notes for a mission.
+  next <name>                Suggest the next useful CLI action.
+  close <name>               Mark a mission complete and freeze final artifacts.
+
+Examples:
+  fcdx mission start dc-procurement --goal "Find 200 manufacturer/procurement-heavy targets"
+  fcdx mission plan dc-procurement --json
+  fcdx mission next dc-procurement
+  fcdx mission status dc-procurement
+```
+
+### `fcdx discover --help`
+
+```text
+Usage: fcdx discover [options] [command]
+
+Discover candidate pools from a market/category description, seed companies,
+keywords, enriched summaries, tags, and cached website evidence.
+
+Commands:
+  category <text>            Expand a category into search terms and candidate companies.
+  similar                    Find companies similar to seed companies.
+  keywords                   Generate and test keyword queries.
+  from-doc                   Turn an uploaded/doc config into target categories and seed lists.
+  gaps                       Find under-covered categories or segments in a mission/list.
+
+Options:
+  --seed <company...>        Seed companies to imitate.
+  --avoid <company...>       Negative examples.
+  --to-list <name>           Save discovered candidates into a list.
+  --limit <n>                Number of candidates.
+  --explain                  Include why each company was discovered.
+
+Examples:
+  fcdx discover category "data center liquid cooling manufacturers" --seed "CoolIT" --to-list liquid-cooling
+  fcdx discover similar --seed "SMTC" --seed "Jabil" --to-list electronics-contract-manufacturers
+  fcdx discover gaps --mission dc-procurement
+```
+
 ### `fcdx list --help`
 
 ```text
@@ -367,6 +540,28 @@ Examples:
   fcdx list add thermal-cooling --from-filter --query "cooling OR thermal"
   fcdx list stats thermal-cooling
   fcdx list show thermal-cooling --include tags,enrichment --limit 25
+```
+
+### `fcdx segment --help`
+
+```text
+Usage: fcdx segment [options] [command]
+
+Split a list into useful sublists or clusters for review, enrichment, ranking,
+or sales execution.
+
+Commands:
+  list <name>                Segment a list by categories, tags, scores, geography, size, or embeddings.
+  cluster <name>             Cluster companies by enriched summaries/evidence.
+  balance <name>             Build a category-balanced sample or shortlist.
+  outliers <name>            Find suspicious or inconsistent rows.
+  create-lists <name>        Materialize segments as named lists.
+
+Examples:
+  fcdx segment list all-candidates --by target_category --create-lists
+  fcdx segment cluster thermal-cooling --k 8 --explain
+  fcdx segment balance all-candidates --per-category 50 --output balanced-250
+  fcdx segment outliers agent-shortlist-200 --where "datacenter_fit > 80 AND manufacturing_fit < 40"
 ```
 
 ### `fcdx tag --help`
@@ -438,6 +633,30 @@ Examples:
   fcdx enrich retry-errors --run target-agent-2026-06-17
 ```
 
+### `fcdx rubric --help`
+
+```text
+Usage: fcdx rubric [options] [command]
+
+Manage enrichment/ranking rubrics and evaluate whether agent scoring matches
+Cronwell's target buyer profile.
+
+Commands:
+  list                       List available rubrics/schema versions.
+  show <name>                Show a rubric prompt, schema, scoring weights, and caps.
+  create <name>              Create a new rubric.
+  test <name>                Run a rubric on known example companies.
+  eval <name>                Evaluate a rubric against labeled examples.
+  compare <a> <b>            Compare two rubric versions on the same sample.
+  promote <name>             Mark a rubric as the default.
+
+Examples:
+  fcdx rubric show cronwell-manufacturing-procurement
+  fcdx rubric test procurement_manufacturing_v2 --company "SMTC" --company "Vertiv"
+  fcdx rubric eval procurement_manufacturing_v2 --label-set cto-feedback-2026-06-18
+  fcdx rubric compare procurement_manufacturing_v1 procurement_manufacturing_v2 --sample 100
+```
+
 ### `fcdx rank --help`
 
 ```text
@@ -472,6 +691,29 @@ Examples:
   fcdx rank enriched --input output/enriched/target-agent-enriched.jsonl --top 200
 ```
 
+### `fcdx review --help`
+
+```text
+Usage: fcdx review [options] [command]
+
+Create human/agent review queues, capture labels, and turn feedback into tags,
+rubric evals, and cleaner rankings.
+
+Commands:
+  queue <name>               Create a review queue from a list/filter/ranking.
+  next <queue>               Show the next company needing review.
+  label <queue>              Label one company as fit/possible/not-fit with reasons.
+  bulk-label <queue>         Apply a label/tag to rows matching a condition.
+  stats <queue>              Show review progress and label distribution.
+  export-labels <queue>      Export labels for rubric evaluation.
+
+Examples:
+  fcdx review queue shortlist-audit --from-list agent-shortlist-200 --sample 50
+  fcdx review next shortlist-audit
+  fcdx review label shortlist-audit --company "SMTC" --label possible-fit --reason "Good EMS target; weaker PDF category."
+  fcdx review bulk-label shortlist-audit --where "manufacturing_fit < 40" --label not-fit
+```
+
 ### `fcdx company --help`
 
 ```text
@@ -491,6 +733,49 @@ Examples:
   fcdx company explain "SMTC"
   fcdx company open-cache "SMTC"
   fcdx company mark-reviewed "SMTC" --status good-fit
+```
+
+### `fcdx evidence --help`
+
+```text
+Usage: fcdx evidence [options] [command]
+
+Search, inspect, and quote evidence from cached website markdown/HTML,
+screenshots, and enrichment rationale.
+
+Commands:
+  search                     Search evidence across companies, lists, or runs.
+  show                       Show evidence snippets for one company.
+  quote                      Print short source snippets for a claim.
+  missing                    Find companies with weak/missing evidence for a field.
+  contradictions             Find rows where evidence conflicts with the agent score.
+
+Examples:
+  fcdx evidence search --list thermal-cooling --query "manufacturing facilities"
+  fcdx evidence show --company "SMTC" --fields manufacturing_fit,procurement_fit
+  fcdx evidence missing --list agent-shortlist-200 --field procurement_fit
+  fcdx evidence contradictions --where "score > 80 AND manufacturing_fit < 50"
+```
+
+### `fcdx account --help`
+
+```text
+Usage: fcdx account [options] [command]
+
+Build account-level sales research packages for Cronwell.
+
+Commands:
+  build                      Build one account dossier.
+  batch                      Build dossiers for a list.
+  brief                      Produce a short account brief.
+  pitch                      Draft pitch angles based on evidence and buyer roles.
+  buyers                     Show known/suggested buyer personas for an account.
+  gaps                       Show missing account data before outreach.
+
+Examples:
+  fcdx account build --company "SMTC" --include evidence,buyers,pitch --output output/accounts/smtc.md
+  fcdx account batch --list agent-shortlist-200 --top 25 --include evidence,buyers,pitch
+  fcdx account gaps --company "SMTC"
 ```
 
 ### `fcdx cache --help`
@@ -578,6 +863,65 @@ Examples:
   fcdx enrich list thermal-cooling --profile cronwell-manufacturing-procurement
 ```
 
+### `fcdx sql --help`
+
+```text
+Usage: fcdx sql [options]
+
+Run safe read-only SQL against the FCD-X DuckDB. Intended for agent diagnostics,
+ad hoc counts, and deeper analysis that is awkward as a first-class command.
+
+Options:
+  --query <sql>              SQL query to run.
+  --file <path>              SQL file to run.
+  --format <format>          table, json, csv.
+  --limit <n>                Max rows unless query has an explicit limit.
+  --readonly                 Enforced; mutating SQL is rejected.
+
+Examples:
+  fcdx sql --query "select industry, count(*) from companies group by 1 order by 2 desc limit 20"
+  fcdx sql --file analysis/category_coverage.sql --format csv
+```
+
+### `fcdx snapshot --help`
+
+```text
+Usage: fcdx snapshot [options] [command]
+
+Freeze and compare lists/rankings/runs so a result can be reproduced later.
+
+Commands:
+  create <name>              Snapshot a list, run, ranking, or mission.
+  show <name>                Show snapshot metadata and artifacts.
+  diff <a> <b>               Compare two snapshots.
+  restore <name>             Recreate a list from a snapshot.
+
+Examples:
+  fcdx snapshot create cto-shortlist-v1 --list agent-shortlist-200
+  fcdx snapshot diff cto-shortlist-v1 cto-shortlist-v2 --explain
+  fcdx snapshot restore cto-shortlist-v1 --to-list restored-shortlist
+```
+
+### `fcdx integration --help`
+
+```text
+Usage: fcdx integration [options] [command]
+
+Import/export/sync data with external systems.
+
+Commands:
+  import-csv                 Import companies, labels, tags, or buyer contacts from CSV.
+  export-crm                 Export account packages for CRM upload.
+  sync-hubspot               Sync selected companies to HubSpot.
+  sync-salesforce            Sync selected companies to Salesforce.
+  webhooks                   Manage webhook endpoints for long-running jobs.
+
+Examples:
+  fcdx integration import-csv --type labels --input cto-reviewed.csv
+  fcdx integration export-crm --list agent-shortlist-200 --format hubspot-csv
+  fcdx integration sync-hubspot --list ready-for-outreach --dry-run
+```
+
 ### `fcdx export --help`
 
 ```text
@@ -656,6 +1000,68 @@ Important flags:
 - `--json`: machine-readable output.
 - `--explain`: show why each row matched.
 
+### Missions
+
+Missions are the larger abstraction above lists and runs. They let an agent keep
+a whole research objective coherent across many steps.
+
+```bash
+fcdx mission start dc-procurement --goal "Find 200 manufacturer/procurement-heavy data center infrastructure targets"
+fcdx mission plan dc-procurement
+fcdx mission next dc-procurement
+fcdx mission status dc-procurement
+fcdx mission close dc-procurement
+```
+
+A mission should track:
+
+- goal and success criteria
+- active lists
+- enrichment/ranking runs
+- selected rubric
+- review queues
+- final exports
+- unresolved blockers
+
+### Discovery
+
+Discovery should help an agent move from a vague market to candidate pools.
+
+```bash
+fcdx discover category "data center switchgear manufacturers" --to-list switchgear-discovery
+fcdx discover similar --seed "SMTC" --seed "Mack Technologies" --to-list ems-similar
+fcdx discover gaps --mission dc-procurement
+```
+
+Discovery can combine:
+
+- keyword expansion
+- seed-company similarity
+- enriched summary search
+- tag/category search
+- PDF/company-doc extraction
+- negative examples
+
+### Segmentation
+
+Segmentation organizes a large list into smaller work queues.
+
+```bash
+fcdx segment cluster all-candidates --k 12 --create-lists
+fcdx segment list agent-shortlist-200 --by category,manufacturing_fit,procurement_fit
+fcdx segment outliers agent-shortlist-200 --where "score > 80 AND manufacturing_fit < 50"
+```
+
+Useful segment dimensions:
+
+- target category
+- manufacturing/procurement score bands
+- geography
+- headcount bucket
+- enriched buyer type
+- confidence/evidence quality
+- review status
+
 ### Lists
 
 Lists are the most important missing abstraction.
@@ -731,6 +1137,26 @@ Important flags:
 The enrichment profile should be explicit. The current profile should be named
 something like `cronwell-manufacturing-procurement`.
 
+### Rubrics And Evals
+
+Rubrics should be first-class because CTO feedback will keep changing the target
+definition.
+
+```bash
+fcdx rubric show cronwell-manufacturing-procurement
+fcdx rubric test procurement_manufacturing_v2 --company "SMTC"
+fcdx rubric eval procurement_manufacturing_v2 --label-set cto-reviewed
+fcdx rubric compare procurement_manufacturing_v1 procurement_manufacturing_v2 --sample 100
+```
+
+Rubric evals should report:
+
+- false positives
+- false negatives
+- score calibration
+- examples where data-center fit overpowered manufacturing/procurement fit
+- examples where category fit was inferred too broadly
+
 ### Ranking
 
 ```bash
@@ -774,6 +1200,40 @@ fcdx company mark-reviewed "SMTC" --status good-fit
 - What evidence weakens fit?
 - Which tags/lists/runs include it?
 - What should be checked manually?
+
+### Evidence Search
+
+Evidence search makes the agent auditable. It should search cached markdown,
+HTML-derived text, screenshots when available, and agent evidence fields.
+
+```bash
+fcdx evidence search --list agent-shortlist-200 --query "manufacturing facilities"
+fcdx evidence show --company "SMTC" --fields manufacturing_fit,procurement_fit
+fcdx evidence contradictions --where "score > 80 AND manufacturing_fit < 50"
+```
+
+This is how agents should debug bad rankings without reopening every website.
+
+### Account Packages
+
+Account packages turn research into sales-ready artifacts.
+
+```bash
+fcdx account build --company "SMTC" --include evidence,buyers,pitch
+fcdx account batch --list agent-shortlist-200 --top 25
+```
+
+An account package should include:
+
+- company snapshot
+- why Cronwell should care
+- manufacturing/procurement evidence
+- target category
+- disqualifiers/caveats
+- likely buyer personas
+- LinkedIn contacts
+- pitch angle
+- source links/cache paths
 
 ### Cache
 
@@ -834,6 +1294,49 @@ fcdx run cancel target-agent-2026-06-17
 - average latency
 - estimated remaining time
 - output files
+
+### SQL
+
+Even with rich commands, agents will need ad hoc analysis.
+
+```bash
+fcdx sql --query "select industry, count(*) from companies group by 1 order by 2 desc limit 20"
+```
+
+Guardrails:
+
+- read-only by default
+- reject mutation statements unless explicitly enabled for migrations
+- auto-limit output unless `--no-limit`
+- always support `--json`
+
+### Snapshots
+
+Snapshots make rankings reproducible.
+
+```bash
+fcdx snapshot create cto-shortlist-v1 --list agent-shortlist-200
+fcdx snapshot diff cto-shortlist-v1 cto-shortlist-v2
+```
+
+Snapshots should store:
+
+- source list/run IDs
+- rubric/schema versions
+- filter/ranking thresholds
+- row IDs and ranks
+- output file paths
+
+### Integrations
+
+The CLI should eventually connect research to CRM/sales workflows.
+
+```bash
+fcdx integration export-crm --list ready-for-outreach --format hubspot-csv
+fcdx integration import-csv --type labels --input cto-reviewed.csv
+```
+
+Early version can be CSV-only. Later versions can sync HubSpot/Salesforce.
 
 ## Agent Ergonomics
 
@@ -930,21 +1433,40 @@ The ranker should also apply deterministic caps:
 - Implement `fcdx tag`.
 - Let `filter` read/write lists directly.
 
-### Phase 3: Runs And Profiles
+### Phase 3: Missions, Runs, And Profiles
 
+- Add `missions` and `mission_artifacts`.
 - Move batch enrichment under `fcdx enrich`.
 - Add `enrichment_runs`.
 - Add saved filter/enrichment profiles.
 - Add run resume/cancel/log commands.
 
-### Phase 4: Buyer Discovery
+### Phase 4: Discovery, Segmentation, Rubrics
+
+- Add `fcdx discover` for seed/category expansion.
+- Add `fcdx segment` for category/score/geography clustering.
+- Add `rubrics`, `review_queues`, and `review_labels`.
+- Add `fcdx rubric` and `fcdx review`.
+- Add eval workflow for CTO feedback and false-positive repair.
+
+### Phase 5: Evidence And Account Packages
+
+- Add `fcdx evidence`.
+- Add `account_packages`.
+- Add `fcdx account`.
+- Add `fcdx snapshot` for reproducibility.
+
+### Phase 6: Buyer Discovery And Integrations
 
 - Add LinkedIn buyer/persona enrichment.
 - Store buyer contacts and account roles.
 - Export account packages for sales review.
+- Add CSV CRM export first.
+- Add HubSpot/Salesforce sync later.
 
-### Phase 5: Agent-Native UX
+### Phase 7: Agent-Native UX
 
 - Add universal `--json`, `--dry-run`, and `--explain`.
 - Add command recipes/playbooks.
 - Add validation commands that catch bad list/ranking assumptions.
+- Add `fcdx mission next` so an agent can ask the CLI what to do next.
