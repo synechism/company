@@ -90,8 +90,9 @@ confidence, reasons, and evidence for:
 - high-volume or high-mix manufacturing
 - large procurement team signals
 - turnkey end-to-end contract manufacturing
-- target alignment with the PDF categories, including a 0-100 agent score,
-  priority, best-fit categories, rationale, and positive/negative evidence
+- procurement-first target alignment with the PDF categories, including a
+  0-100 agent score, manufacturing/procurement/category/data-center sub-scores,
+  priority, best-fit categories, rationale, disqualifiers, and evidence
 
 ## FCD-X CLI
 
@@ -194,6 +195,7 @@ Flags:
 
 - `--company <name>`: required company name, website, or domain substring.
 - `--db <path>`: DuckDB path.
+- `--country <country>`: country filter. Defaults to `united states`; pass `'*'` to search globally.
 - `--cache-dir <path>`: Firecrawl filesystem cache root. Defaults to `output/cache/firecrawl`.
 - `--output <path>`: append enriched JSONL output. Defaults to `output/enriched/fcdx-crawl.jsonl`.
 - `--timeout-ms <n>`: per-company Firecrawl timeout. Defaults to `120000`.
@@ -307,11 +309,18 @@ Flags:
 
 Sort an agent-enriched JSONL by the agent's `target_alignment.score` and write
 the top rows as JSONL and CSV. This is the preferred way to produce the final
-target shortlist once candidates have gone through Firecrawl enrichment.
+target shortlist once candidates have gone through Firecrawl enrichment. The
+ranker applies procurement/manufacturing guardrails: weak manufacturing,
+procurement, or category fit can cap the effective ranking score even if the
+agent's raw blended score is high.
 
 ```bash
 npm run fcdx -- target rank-enriched \
   --enriched output/enriched/target-agent-enriched.jsonl \
+  --min-score 70 \
+  --min-manufacturing-fit 65 \
+  --min-procurement-fit 65 \
+  --min-category-fit 40 \
   --limit 200 \
   --output output/target/agent-shortlist-200.jsonl \
   --csv-output output/target/agent-shortlist-200.csv
@@ -321,6 +330,11 @@ Flags:
 
 - `--config <path>`: target company/category config. Defaults to `config/target_companies_and_categories.json`.
 - `--enriched <path>`: required enriched JSONL with `target_alignment` fields.
+- `--min-score <n>`: minimum final target-alignment score.
+- `--min-manufacturing-fit <n>`: minimum manufacturing/fabrication/assembly fit sub-score.
+- `--min-procurement-fit <n>`: minimum procurement-complexity fit sub-score.
+- `--min-category-fit <n>`: minimum PDF category fit sub-score.
+- `--min-datacenter-fit <n>`: minimum data-center/critical-infrastructure fit sub-score.
 - `--limit <n>`: number of ranked rows to write. Defaults to `200`.
 - `--output <path>`: JSONL ranked shortlist output path.
 - `--csv-output <path>`: CSV ranked shortlist output path.

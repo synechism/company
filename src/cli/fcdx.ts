@@ -112,6 +112,7 @@ program
   .description("Enrich one company with Firecrawl, using the local filesystem cache")
   .requiredOption("--company <name>", "Company name or website substring")
   .option("--db <path>", "DuckDB path", DEFAULT_DB_PATH)
+  .option("--country <country>", "Country filter; pass '*' to search globally", "united states")
   .option("--cache-dir <path>", "Filesystem cache root", "output/cache/firecrawl")
   .option("-o, --output <path>", "Append enriched JSONL output", "output/enriched/fcdx-crawl.jsonl")
   .option("--timeout-ms <n>", "Per-company Firecrawl timeout", parseIntArg, 120_000)
@@ -120,7 +121,8 @@ program
     if (!process.env.FIRECRAWL_API_KEY) throw new Error("FIRECRAWL_API_KEY is required");
     const { instance, connection } = await connectFcdxDb(options.db);
     try {
-      const [company] = await queryCompanies(connection, { company: options.company, limit: 1 });
+      const country = options.country === "*" ? undefined : options.country;
+      const [company] = await queryCompanies(connection, { company: options.company, country, limit: 1 });
       if (!company) throw new Error(`No company matched ${options.company}. Try fcdx filterby --company='${options.company}'.`);
       const result = await enrichCompanyWithFirecrawl(company, {
         apiKey: process.env.FIRECRAWL_API_KEY,
@@ -369,6 +371,11 @@ target
   .option("--config <path>", "Target company/category config", "config/target_companies_and_categories.json")
   .requiredOption("--enriched <path>", "Agent-enriched JSONL path with target_alignment")
   .option("--limit <n>", "Number of rows to write", parseIntArg, 200)
+  .option("--min-score <n>", "Minimum final target-alignment score", parseIntArg)
+  .option("--min-manufacturing-fit <n>", "Minimum manufacturing/fabrication/assembly fit sub-score", parseIntArg)
+  .option("--min-procurement-fit <n>", "Minimum procurement-complexity fit sub-score", parseIntArg)
+  .option("--min-category-fit <n>", "Minimum PDF category fit sub-score", parseIntArg)
+  .option("--min-datacenter-fit <n>", "Minimum data-center/critical-infrastructure fit sub-score", parseIntArg)
   .option("-o, --output <path>", "JSONL ranked shortlist output path", "output/target/agent-shortlist-200.jsonl")
   .option("--csv-output <path>", "CSV ranked shortlist output path", "output/target/agent-shortlist-200.csv")
   .action(async (options) => {
@@ -379,7 +386,14 @@ target
       if (enrichedRowsWithTargetAlignment === 0) {
         console.error("Warning: no rows contain enrichment.target_alignment; rerun enrichment with the current schema before using this as a final shortlist.");
       }
-      const rows = buildAgentJudgedShortlist(config, enrichedRows, { limit: options.limit });
+      const rows = buildAgentJudgedShortlist(config, enrichedRows, {
+        limit: options.limit,
+        minScore: options.minScore,
+        minManufacturingFit: options.minManufacturingFit,
+        minProcurementFit: options.minProcurementFit,
+        minCategoryFit: options.minCategoryFit,
+        minDatacenterFit: options.minDatacenterFit,
+      });
       await fs.mkdir(path.dirname(options.output), { recursive: true });
       await fs.writeFile(options.output, rows.map((row) => JSON.stringify(row)).join("\n") + (rows.length ? "\n" : ""), "utf8");
       await writeAgentShortlistCsv(options.csvOutput, rows);
@@ -394,6 +408,8 @@ target
             topCompanies: rows.slice(0, 10).map((row) => ({
               score: row.score,
               priority: row.priority,
+              manufacturingFit: row.manufacturingFit,
+              procurementFit: row.procurementFit,
               name: row.source_row.name,
               industry: row.source_row.industry,
               size: row.source_row.size,

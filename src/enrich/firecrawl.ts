@@ -3,7 +3,12 @@ import fs from "node:fs/promises";
 import type { CandidateCompany, CompanyEnrichment, EnrichedCompany } from "../types.js";
 import { candidateToDatasetRow } from "../data/row.js";
 import { ensureDir, safeName, writeJson, writeText } from "../crawl/artifacts.js";
-import { buildEnrichmentPrompt, emptyEnrichment, enrichmentSchema } from "./questions.js";
+import {
+  buildEnrichmentPrompt,
+  emptyEnrichment,
+  enrichmentSchema,
+  TARGET_ALIGNMENT_SCHEMA_VERSION,
+} from "./questions.js";
 
 type FirecrawlJsonScrapeResponse = {
   success?: boolean;
@@ -124,7 +129,8 @@ async function readCachedFirecrawlPayload(
       error?: string;
     };
     if (parsed.raw && typeof parsed.status === "number") {
-      if (parsed.raw.data?.json && !parsed.raw.data.json.target_alignment) return undefined;
+      const alignment = parsed.raw.data?.json?.target_alignment;
+      if (parsed.raw.data?.json && alignment?.schema_version !== TARGET_ALIGNMENT_SCHEMA_VERSION) return undefined;
       return {
         ok: parsed.ok ?? (parsed.status >= 200 && parsed.status < 300),
         status: parsed.status,

@@ -137,18 +137,25 @@ export async function queryCompanies(
     for (const [index, bucket] of buckets.entries()) params[`size${index}`] = bucket;
   }
   if (query.company) {
-    where.push("(name ILIKE $company OR website ILIKE $company)");
+    const companyExact = query.company.trim().toLowerCase();
+    const companyDomain = normalizeCompanySearchDomain(query.company);
+    where.push("(name ILIKE $company OR website ILIKE $company OR linkedin_url ILIKE $company)");
     params.company = `%${query.company}%`;
-    params.companyExact = query.company.toLowerCase();
-    params.companyDomain = query.company.toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
-    params.companyPrefix = `${query.company.toLowerCase()}%`;
+    params.companyExact = companyExact;
+    params.companyDomain = companyDomain;
+    params.companyDomainCom = companyDomain.includes(".") ? companyDomain : `${companyDomain}.com`;
+    params.companyLinkedinUrl = `linkedin.com/company/${companyDomain}`;
+    params.companyNamePrefix = `${companyExact}%`;
+    params.companyWebsitePrefix = `${companyDomain}%`;
     companyRankSql = `
       CASE
-        WHEN lower(name) = $companyExact THEN 0
-        WHEN lower(website) = $companyDomain THEN 1
-        WHEN lower(name) LIKE $companyPrefix THEN 2
-        WHEN lower(website) LIKE $companyPrefix THEN 3
-        ELSE 4
+        WHEN lower(website) = $companyDomain THEN 0
+        WHEN lower(website) = $companyDomainCom THEN 1
+        WHEN lower(linkedin_url) = $companyLinkedinUrl THEN 2
+        WHEN lower(name) = $companyExact THEN 3
+        WHEN lower(website) LIKE $companyWebsitePrefix THEN 4
+        WHEN lower(name) LIKE $companyNamePrefix THEN 5
+        ELSE 6
       END,
     `;
   }
@@ -252,6 +259,16 @@ function asPositiveInt(value: number): number {
 
 function escapeSqlString(value: string): string {
   return value.replace(/'/g, "''");
+}
+
+function normalizeCompanySearchDomain(value: string): string {
+  const trimmed = value.trim().toLowerCase();
+  try {
+    const url = new URL(trimmed.startsWith("http") ? trimmed : `https://${trimmed}`);
+    return url.hostname.replace(/^www\./, "");
+  } catch {
+    return trimmed.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
+  }
 }
 
 function text(value: unknown): string {

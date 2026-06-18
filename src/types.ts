@@ -88,12 +88,18 @@ export type EnrichmentAnswer = {
 };
 
 export type TargetAlignment = {
+  schema_version: string;
   score: number;
   priority: "high" | "medium" | "low" | "not_relevant";
+  manufacturing_fit: number;
+  procurement_fit: number;
+  category_fit: number;
+  datacenter_fit: number;
   best_fit_categories: string[];
   reason: string;
   positive_evidence: string[];
   negative_evidence: string[];
+  disqualifiers: string[];
 };
 
 export type CompanyEnrichment = Record<EnrichmentQuestionKey, EnrichmentAnswer> & {

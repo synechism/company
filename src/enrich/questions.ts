@@ -1,5 +1,7 @@
 import type { CompanyEnrichment, EnrichmentAnswer, EnrichmentQuestionKey, TargetAlignment } from "../types.js";
 
+export const TARGET_ALIGNMENT_SCHEMA_VERSION = "procurement_manufacturing_v2";
+
 export const ENRICHMENT_QUESTIONS: Record<EnrichmentQuestionKey, string> = {
   supplies_datacenters:
     "Does this company supply data centers or participate in data center buildout?",
@@ -45,17 +47,49 @@ const answerSchema = {
 const targetAlignmentSchema = {
   type: "object",
   properties: {
+    schema_version: {
+      type: "string",
+      enum: [TARGET_ALIGNMENT_SCHEMA_VERSION],
+      description: "Target-alignment rubric version used for this judgment.",
+    },
     score: {
       type: "number",
       minimum: 0,
       maximum: 100,
       description:
-        "Overall fit score from 0 to 100 for the target profile. 90+ is an obvious fit, 70-89 is strong, 50-69 is possible, below 50 is weak.",
+        "Final weighted fit score from 0 to 100, after applying the rubric and caps. It should be close to the weighted average of the independent sub-scores.",
     },
     priority: {
       type: "string",
       enum: ["high", "medium", "low", "not_relevant"],
       description: "Recommended research/sales priority based on the target profile.",
+    },
+    manufacturing_fit: {
+      type: "number",
+      minimum: 0,
+      maximum: 100,
+      description:
+        "Independent 0-100 rating, not weighted points. Measures how strongly the company appears to manufacture, fabricate, assemble, integrate, or operate production/factory/shop-floor workflows.",
+    },
+    procurement_fit: {
+      type: "number",
+      minimum: 0,
+      maximum: 100,
+      description:
+        "Independent 0-100 rating, not weighted points. Measures likely procurement complexity: purchased parts/materials, supplier base, sourcing, quoting, production purchasing, ERP/MRP, multi-site operations, or supply-chain teams.",
+    },
+    category_fit: {
+      type: "number",
+      minimum: 0,
+      maximum: 100,
+      description: "Independent 0-100 rating, not weighted points. Measures how well the company fits one or more PDF target categories.",
+    },
+    datacenter_fit: {
+      type: "number",
+      minimum: 0,
+      maximum: 100,
+      description:
+        "Independent 0-100 rating, not weighted points. Measures how clearly the company serves data centers, critical infrastructure, or adjacent mission-critical/industrial markets. This is a secondary signal.",
     },
     best_fit_categories: {
       type: "array",
@@ -76,7 +110,8 @@ const targetAlignmentSchema = {
           "none",
         ],
       },
-      description: "One or more PDF target categories that best match the company, or none.",
+      description:
+        "One or more PDF target categories that best match the company. Use none only when no category fits; never combine none with real categories.",
     },
     reason: {
       type: "string",
@@ -93,14 +128,26 @@ const targetAlignmentSchema = {
       items: { type: "string" },
       description: "Short evidence snippets or caveats weakening target fit.",
     },
+    disqualifiers: {
+      type: "array",
+      items: { type: "string" },
+      description:
+        "Reasons to de-prioritize, especially no manufacturing/fabrication/assembly evidence, no procurement complexity, purely services/consulting/residential, or only data-center exposure with no manufacturer buyer profile.",
+    },
   },
   required: [
+    "schema_version",
     "score",
     "priority",
+    "manufacturing_fit",
+    "procurement_fit",
+    "category_fit",
+    "datacenter_fit",
     "best_fit_categories",
     "reason",
     "positive_evidence",
     "negative_evidence",
+    "disqualifiers",
   ],
   additionalProperties: false,
 } as const;
@@ -150,18 +197,54 @@ Answer these five questions independently:
 4. ${ENRICHMENT_QUESTIONS.large_procurement_team}
 5. ${ENRICHMENT_QUESTIONS.turnkey_contract_manufacturer}
 
-Then score target_alignment for this specific target profile:
-- We are looking for US mid-market companies that are meaningfully involved in data center buildout or the supply chain for data center equipment/infrastructure.
-- Highest priority categories: switchgear, transformers, busway, electrical contractors, mechanical contractors, structural steel, precast concrete, and site development.
-- Strong additional categories: generators, backup power, battery energy storage, fuel cells, microgrids, cooling, thermal management, modular data center construction, general contractors, MEP engineering, and commissioning.
-- Useful lower-priority categories: cabling/connectivity, racks/enclosures/containment, building management/DCIM, fire suppression, and physical security.
-- Prefer companies that manufacture equipment, own factories, do high-volume/high-mix production, manage complex procurement/sourcing, or provide turnkey contract manufacturing.
-- Penalize generic consultants, purely residential/local contractors, distributors/resellers with no manufacturing or buildout role, unrelated electronics/software firms, and companies with no evidence of data center or critical infrastructure relevance.
+Then score target_alignment for this specific target profile.
+
+Cronwell context:
+- Cronwell sells AI procurement automation to mid-market manufacturers.
+- The ideal buyer is a manufacturer, fabricator, assembler, industrial contractor with significant material purchasing, or contract manufacturer with complex purchased parts/materials and supplier workflows.
+- Data-center exposure is useful only because the PDF categories identify markets with heavy manufacturing/procurement needs. Do not over-rank a company merely because it serves data centers.
+
+Primary target profile:
+- The company should have manufacturing, fabrication, assembly, integration, production, factory, shop-floor, field-installation-with-materials, or complex industrial operations.
+- The company should plausibly have meaningful procurement complexity: many purchased parts/SKUs, raw materials, electrical/mechanical components, supplier quoting, sourcing, supply-chain teams, project purchasing, ERP/MRP, or multi-site operations.
+- The company should fit one or more PDF categories.
+
+PDF target categories:
+- Highest priority categories: switchgear, transformers, busway, electrical contractors, mechanical contractors, structural steel, precast concrete, site development, and other equipment-heavy infrastructure providers.
+- Strong additional categories: generators, backup power, battery energy storage, fuel cells, microgrids, cooling, thermal management, modular construction, MEP engineering, commissioning, and industrialized construction.
+- Useful lower-priority categories: cabling/connectivity, racks/enclosures/containment, building management/DCIM, fire suppression, and physical security, but only when they look like manufacturers/integrators with procurement complexity.
+- Do not infer a PDF category from the broad PDL industry name alone. For example, electronics manufacturing or PCB assembly is not automatically an electrical contractor, MEP firm, switchgear company, or modular construction company.
+- If the company is a strong manufacturer/procurement fit but does not clearly match a PDF category, use best_fit_categories ["none"] and give category_fit below 40.
+
+Sub-score rubric:
+- Each fit sub-score is an independent 0-100 rating, not weighted points. Do not make the four sub-scores add up to 100.
+- manufacturing_fit: 90-100 means clear factory/manufacturing/contract-manufacturing footprint; 70-89 means strong fabrication/assembly/integration/industrial operations; 40-69 means possible but indirect; below 40 means little evidence.
+- procurement_fit: 90-100 means obvious complex purchasing/supply-chain operations; 70-89 means strong inferred material/supplier complexity; 40-69 means possible; below 40 means weak evidence.
+- category_fit: 90-100 means direct fit to a highest-priority PDF category; 70-89 strong fit; 40-69 adjacent or lower-priority category; below 40 weak/no category fit.
+- datacenter_fit: 90-100 means explicit data-center focus; 70-89 strong critical-infrastructure/mission-critical fit; 40-69 adjacent industrial/cloud/advanced-computing fit; below 40 weak/no evidence.
+
+Final scoring rubric:
+- Compute final score approximately as: 35% manufacturing_fit + 35% procurement_fit + 20% category_fit + 10% datacenter_fit, then apply the caps and guardrails below.
+- Do not let data-center relevance overpower weak manufacturing or procurement evidence.
+- 85-100: clear manufacturer/fabricator/assembler/industrial contractor, strong procurement complexity, and strong PDF category fit.
+- 70-84: likely manufacturer/procurement-heavy company with good category fit, but one signal is weaker or inferential.
+- 50-69: possible fit; some manufacturing/procurement/category evidence but incomplete or indirect.
+- 20-49: weak fit; mostly service, distributor, residential/local contractor, software/consulting, or weak procurement complexity.
+- 0-19: not relevant.
+
+Score caps and guardrails:
+- If manufacturing_or_factories is "no" and there is no fabrication/assembly/integration/industrial project purchasing evidence, cap final score at 45.
+- If manufacturing_or_factories is "unknown", cap final score at 65 unless there is strong evidence of industrial contracting with substantial material procurement.
+- If large_procurement_team is "no" or procurement complexity is weak, cap final score at 70.
+- If the company only has data-center exposure but no manufacturing/procurement buyer profile, cap final score at 55.
+- Generic consultants, software-only firms, staffing firms, real estate firms, purely residential/local contractors, and simple distributors/resellers should usually be low or not_relevant.
 
 Important rules:
 - This is enrichment, not filtering. Do not reject or rank the company.
 - For each question return answer yes/no/unknown, confidence, reason, and evidence.
 - For target_alignment, do rank the company against the target profile on a 0-100 scale.
+- target_alignment.schema_version must be "${TARGET_ALIGNMENT_SCHEMA_VERSION}".
+- In target_alignment.best_fit_categories, use "none" only by itself. Do not include "none" alongside real categories.
 - Use "unknown" when the website page does not explicitly provide enough evidence.
 - Large procurement team is usually inferential; use yes only when there are strong signals like many facilities, large-scale operations, global sourcing, supplier portals, procurement careers, extensive manufacturing footprint, or explicit procurement/supply-chain language.
 - Turnkey contract manufacturer means end-to-end outsourced manufacturing for customers, not just construction, consulting, distribution, installation, or selling own products.
@@ -177,12 +260,18 @@ export function emptyEnrichment(error: string): CompanyEnrichment {
     evidence: [],
   };
   const targetAlignment: TargetAlignment = {
+    schema_version: TARGET_ALIGNMENT_SCHEMA_VERSION,
     score: 0,
     priority: "not_relevant",
+    manufacturing_fit: 0,
+    procurement_fit: 0,
+    category_fit: 0,
+    datacenter_fit: 0,
     best_fit_categories: ["none"],
     reason: error,
     positive_evidence: [],
     negative_evidence: [],
+    disqualifiers: [error],
   };
   return {
     company_summary: "",

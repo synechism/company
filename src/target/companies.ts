@@ -37,11 +37,17 @@ export type AgentShortlistRow = {
   source_row: DatasetCompanyRow;
   score: number;
   priority: string;
+  manufacturingFit: number;
+  procurementFit: number;
+  categoryFit: number;
+  datacenterFit: number;
   categories: string[];
   company_summary: string;
   target_reason: string;
   positive_evidence: string[];
   negative_evidence: string[];
+  disqualifiers: string[];
+  schemaVersion?: string;
   yesCount: number;
   enrichment: EnrichedCompany["enrichment"];
   agent_metadata: EnrichedCompany["agent_metadata"];
@@ -228,27 +234,54 @@ export function buildTargetShortlist(
 export function buildAgentJudgedShortlist(
   config: TargetConfig,
   rows: EnrichedCompany[],
-  options: { limit: number },
+  options: {
+    limit: number;
+    minScore?: number;
+    minManufacturingFit?: number;
+    minProcurementFit?: number;
+    minCategoryFit?: number;
+    minDatacenterFit?: number;
+  },
 ): AgentShortlistRow[] {
   const excluded = excludedTargetKeys(config);
   return rows
     .filter((row) => !rowMatchesExcluded(row.source_row, excluded))
     .map((row) => {
       const target = row.enrichment.target_alignment;
+      const categories = normalizeAgentCategories(target?.best_fit_categories ?? []);
+      const manufacturingFit = target?.manufacturing_fit ?? 0;
+      const procurementFit = target?.procurement_fit ?? 0;
+      const categoryFit = categories.includes("none") ? Math.min(target?.category_fit ?? 0, 39) : target?.category_fit ?? 0;
       return {
         source_row: row.source_row,
-        score: target?.score ?? 0,
+        score: adjustedAgentScore(target?.score ?? 0, {
+          categories,
+          manufacturingFit,
+          procurementFit,
+          categoryFit,
+        }),
         priority: target?.priority ?? "not_relevant",
-        categories: target?.best_fit_categories ?? [],
+        manufacturingFit,
+        procurementFit,
+        categoryFit,
+        datacenterFit: target?.datacenter_fit ?? 0,
+        categories,
         company_summary: row.enrichment.company_summary,
         target_reason: target?.reason ?? "",
         positive_evidence: target?.positive_evidence ?? [],
         negative_evidence: target?.negative_evidence ?? [],
+        disqualifiers: target?.disqualifiers ?? [],
+        schemaVersion: target?.schema_version,
         yesCount: countYesAnswers(row),
         enrichment: row.enrichment,
         agent_metadata: row.agent_metadata,
       };
     })
+    .filter((row) => row.score >= (options.minScore ?? 0))
+    .filter((row) => row.manufacturingFit >= (options.minManufacturingFit ?? 0))
+    .filter((row) => row.procurementFit >= (options.minProcurementFit ?? 0))
+    .filter((row) => row.categoryFit >= (options.minCategoryFit ?? 0))
+    .filter((row) => row.datacenterFit >= (options.minDatacenterFit ?? 0))
     .sort(
       (a, b) =>
         b.score - a.score ||
@@ -318,6 +351,10 @@ export async function writeAgentShortlistCsv(pathname: string, rows: AgentShortl
   const columns = [
     "target_alignment_score",
     "target_alignment_priority",
+    "target_alignment_manufacturing_fit",
+    "target_alignment_procurement_fit",
+    "target_alignment_category_fit",
+    "target_alignment_datacenter_fit",
     "target_alignment_categories",
     "yes_count",
     "id",
@@ -335,6 +372,8 @@ export async function writeAgentShortlistCsv(pathname: string, rows: AgentShortl
     "target_alignment_reason",
     "target_alignment_positive_evidence",
     "target_alignment_negative_evidence",
+    "target_alignment_disqualifiers",
+    "target_alignment_schema_version",
     "supplies_datacenters_answer",
     "manufacturing_or_factories_answer",
     "high_volume_or_high_mix_answer",
@@ -529,6 +568,10 @@ function coverageCsvValue(column: string, row: TargetMatch): unknown {
 function agentShortlistCsvValue(column: string, row: AgentShortlistRow): unknown {
   if (column === "target_alignment_score") return row.score;
   if (column === "target_alignment_priority") return row.priority;
+  if (column === "target_alignment_manufacturing_fit") return row.manufacturingFit;
+  if (column === "target_alignment_procurement_fit") return row.procurementFit;
+  if (column === "target_alignment_category_fit") return row.categoryFit;
+  if (column === "target_alignment_datacenter_fit") return row.datacenterFit;
   if (column === "target_alignment_categories") return row.categories.join("; ");
   if (column === "yes_count") return row.yesCount;
   if (column === "final_url") return row.agent_metadata.final_url;
@@ -536,6 +579,8 @@ function agentShortlistCsvValue(column: string, row: AgentShortlistRow): unknown
   if (column === "target_alignment_reason") return row.target_reason;
   if (column === "target_alignment_positive_evidence") return row.positive_evidence.join("; ");
   if (column === "target_alignment_negative_evidence") return row.negative_evidence.join("; ");
+  if (column === "target_alignment_disqualifiers") return row.disqualifiers.join("; ");
+  if (column === "target_alignment_schema_version") return row.schemaVersion;
   if (column === "final_notes") return row.enrichment.final_notes;
   if (column === "elapsed_ms") return row.agent_metadata.elapsed_ms;
   if (column === "error") return row.agent_metadata.error;
@@ -554,6 +599,24 @@ function priorityRank(priority: string): number {
   if (priority === "medium") return 2;
   if (priority === "low") return 1;
   return 0;
+}
+
+function normalizeAgentCategories(categories: string[]): string[] {
+  const unique = [...new Set(categories.length ? categories : ["none"])];
+  if (unique.length > 1) return unique.filter((category) => category !== "none");
+  return unique;
+}
+
+function adjustedAgentScore(
+  score: number,
+  row: { categories: string[]; manufacturingFit: number; procurementFit: number; categoryFit: number },
+): number {
+  let adjusted = score;
+  if (row.categories.includes("none")) adjusted = Math.min(adjusted, 74);
+  if (row.categoryFit < 40) adjusted = Math.min(adjusted, 74);
+  if (row.manufacturingFit < 50) adjusted = Math.min(adjusted, 55);
+  if (row.procurementFit < 50) adjusted = Math.min(adjusted, 60);
+  return adjusted;
 }
 
 function escapeCsv(value: unknown): string {

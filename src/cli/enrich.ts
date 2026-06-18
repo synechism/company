@@ -185,10 +185,16 @@ async function writeCsv(pathname: string, rows: EnrichedCompany[]): Promise<void
     "turnkey_contract_manufacturer_reason",
     "target_alignment_score",
     "target_alignment_priority",
+    "target_alignment_manufacturing_fit",
+    "target_alignment_procurement_fit",
+    "target_alignment_category_fit",
+    "target_alignment_datacenter_fit",
     "target_alignment_categories",
     "target_alignment_reason",
     "target_alignment_positive_evidence",
     "target_alignment_negative_evidence",
+    "target_alignment_disqualifiers",
+    "target_alignment_schema_version",
     "final_notes",
     "elapsed_ms",
     "error",
@@ -222,10 +228,16 @@ function csvValue(
   if (column === "company_summary") return enrichment.company_summary;
   if (column === "target_alignment_score") return enrichment.target_alignment?.score;
   if (column === "target_alignment_priority") return enrichment.target_alignment?.priority;
+  if (column === "target_alignment_manufacturing_fit") return enrichment.target_alignment?.manufacturing_fit;
+  if (column === "target_alignment_procurement_fit") return enrichment.target_alignment?.procurement_fit;
+  if (column === "target_alignment_category_fit") return enrichment.target_alignment?.category_fit;
+  if (column === "target_alignment_datacenter_fit") return enrichment.target_alignment?.datacenter_fit;
   if (column === "target_alignment_categories") return enrichment.target_alignment?.best_fit_categories?.join("; ");
   if (column === "target_alignment_reason") return enrichment.target_alignment?.reason;
   if (column === "target_alignment_positive_evidence") return enrichment.target_alignment?.positive_evidence?.join("; ");
   if (column === "target_alignment_negative_evidence") return enrichment.target_alignment?.negative_evidence?.join("; ");
+  if (column === "target_alignment_disqualifiers") return enrichment.target_alignment?.disqualifiers?.join("; ");
+  if (column === "target_alignment_schema_version") return enrichment.target_alignment?.schema_version;
   if (column === "final_notes") return enrichment.final_notes;
   if (column === "elapsed_ms") return row.agent_metadata.elapsed_ms;
   if (column === "error") return row.agent_metadata.error;
