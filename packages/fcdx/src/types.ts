@@ -1,16 +1,3 @@
-export type CompanyRecord = {
-  country?: string;
-  founded?: string;
-  id?: string;
-  industry?: string;
-  linkedin_url?: string;
-  locality?: string;
-  name?: string;
-  region?: string;
-  size?: string;
-  website?: string;
-};
-
 export type CandidateCompany = {
   id: string;
   name: string;
@@ -36,39 +23,6 @@ export type DatasetCompanyRow = {
   region: string | null;
   size: string;
   website: string;
-};
-
-export type CrawlBackend = "local" | "hyperbrowser" | "firecrawl";
-
-export type PageArtifact = {
-  url: string;
-  finalUrl: string;
-  title: string;
-  text: string;
-  htmlPath?: string;
-  screenshotPath?: string;
-  elapsedMs: number;
-  error?: string;
-};
-
-export type FitVerdict = "fit" | "possible_fit" | "not_fit";
-
-export type FitAssessment = {
-  verdict: FitVerdict;
-  score: number;
-  reasons: string[];
-  matchedSignals: string[];
-  snippets: string[];
-};
-
-export type CrawlResult = {
-  company: CandidateCompany;
-  backend: CrawlBackend;
-  startedAt: string;
-  elapsedMs: number;
-  pages: PageArtifact[];
-  assessment: FitAssessment;
-  error?: string;
 };
 
 export type YesNoUnknown = "yes" | "no" | "unknown";

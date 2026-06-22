@@ -1,11 +1,13 @@
-FROM mcr.microsoft.com/playwright:v1.61.0-noble
+FROM node:24-bookworm-slim
 
 WORKDIR /app
 
-COPY package.json package-lock.json* tsconfig.json ./
-RUN npm install
+RUN npm install -g pnpm@10.24.0
 
-COPY src ./src
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
+COPY packages ./packages
+RUN pnpm install --frozen-lockfile
+
 COPY config ./config
 COPY README.md ./
 
@@ -13,4 +15,4 @@ ENV PDL_COMPANY_CSV=/data/free_company_dataset.csv
 ENV CRAWL_BACKEND=local
 ENV CRAWL_CONCURRENCY=2
 
-CMD ["npm", "run", "profile"]
+CMD ["pnpm", "fcdx", "--help"]

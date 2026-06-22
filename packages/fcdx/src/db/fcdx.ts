@@ -2,9 +2,10 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { DuckDBInstance, type DuckDBConnection } from "@duckdb/node-api";
 import type { CandidateCompany } from "../types.js";
-import { normalizeWebsite } from "../data/csv.js";
+import { normalizeWebsite } from "../data/url.js";
+import { resolveDbPath } from "../config.js";
 
-export const DEFAULT_DB_PATH = process.env.FCDX_DB_PATH ?? "output/fcdx.duckdb";
+export const DEFAULT_DB_PATH = resolveDbPath();
 
 export type CompanyQuery = {
   industry?: string[];
@@ -113,6 +114,83 @@ export async function ensureSchema(connection: DuckDBConnection): Promise<void> 
       updated_at TIMESTAMP
     )
   `);
+  await ensureWorkspaceSchema(connection);
+}
+
+export async function ensureWorkspaceSchema(connection: DuckDBConnection): Promise<void> {
+  await connection.run(`
+    CREATE TABLE IF NOT EXISTS lists (
+      id VARCHAR PRIMARY KEY,
+      name VARCHAR UNIQUE NOT NULL,
+      description VARCHAR,
+      metadata_json JSON,
+      created_at TIMESTAMP,
+      updated_at TIMESTAMP
+    )
+  `);
+  await connection.run(`
+    CREATE TABLE IF NOT EXISTS list_members (
+      list_id VARCHAR NOT NULL,
+      company_id VARCHAR NOT NULL,
+      source VARCHAR,
+      reason VARCHAR,
+      rank INTEGER,
+      score DOUBLE,
+      added_at TIMESTAMP,
+      updated_at TIMESTAMP,
+      PRIMARY KEY (list_id, company_id)
+    )
+  `);
+  await connection.run("CREATE INDEX IF NOT EXISTS list_members_company_idx ON list_members(company_id)");
+  await connection.run(`
+    CREATE TABLE IF NOT EXISTS list_fields (
+      list_id VARCHAR NOT NULL,
+      field_key VARCHAR NOT NULL,
+      field_type VARCHAR,
+      description VARCHAR,
+      metadata_json JSON,
+      created_at TIMESTAMP,
+      updated_at TIMESTAMP,
+      PRIMARY KEY (list_id, field_key)
+    )
+  `);
+  await connection.run(`
+    CREATE TABLE IF NOT EXISTS list_field_values (
+      list_id VARCHAR NOT NULL,
+      company_id VARCHAR NOT NULL,
+      field_key VARCHAR NOT NULL,
+      value_json JSON,
+      source VARCHAR,
+      confidence DOUBLE,
+      updated_at TIMESTAMP,
+      PRIMARY KEY (list_id, company_id, field_key)
+    )
+  `);
+  await connection.run("CREATE INDEX IF NOT EXISTS list_field_values_company_idx ON list_field_values(company_id)");
+  await connection.run(`
+    CREATE TABLE IF NOT EXISTS tags (
+      id VARCHAR PRIMARY KEY,
+      name VARCHAR UNIQUE NOT NULL,
+      description VARCHAR,
+      metadata_json JSON,
+      created_at TIMESTAMP,
+      updated_at TIMESTAMP
+    )
+  `);
+  await connection.run(`
+    CREATE TABLE IF NOT EXISTS company_tags (
+      company_id VARCHAR NOT NULL,
+      tag_id VARCHAR NOT NULL,
+      value VARCHAR,
+      source VARCHAR,
+      confidence DOUBLE,
+      reason VARCHAR,
+      created_at TIMESTAMP,
+      updated_at TIMESTAMP,
+      PRIMARY KEY (company_id, tag_id)
+    )
+  `);
+  await connection.run("CREATE INDEX IF NOT EXISTS company_tags_tag_idx ON company_tags(tag_id)");
 }
 
 export async function queryCompanies(

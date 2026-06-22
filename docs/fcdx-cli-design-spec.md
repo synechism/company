@@ -48,23 +48,41 @@ Current commands:
 
 ```text
 fcdx db init
+fcdx db migrate
+fcdx config path/show/init
 fcdx filterby
 fcdx crawl
+fcdx enrich file
+fcdx list
+fcdx tag
 fcdx linkedin auth
 fcdx linkedin list-profiles
 fcdx target compare
 fcdx target shortlist
 fcdx target rank-enriched
-npm run enrich
 ```
 
 Useful existing pieces:
 
-- DuckDB company cache in `src/db/fcdx.ts`.
-- Firecrawl enrichment/cache in `src/enrich/firecrawl.ts`.
-- Agent prompt/schema in `src/enrich/questions.ts`.
-- Target ranking in `src/target/companies.ts`.
-- Unipile LinkedIn integration in `src/unipile/client.ts`.
+- DuckDB company cache in `packages/fcdx/src/db/fcdx.ts`.
+- Workspace list/tag tables and helpers in `packages/fcdx/src/db/workspace.ts`.
+- Firecrawl enrichment/cache in `packages/fcdx/src/enrich/firecrawl.ts`.
+- Batch file-backed enrichment in `packages/fcdx/src/enrich/batch.ts`.
+- Agent prompt/schema in `packages/fcdx/src/enrich/questions.ts`.
+
+`filterby` can now save its result set directly to a durable list:
+
+```bash
+fcdx filterby \
+  --industry "construction,electrical/electronic manufacturing" \
+  --headcount-min 200 \
+  --headcount-max 10000 \
+  --limit 10000 \
+  --to-list strict-midmarket-candidates \
+  --create-list
+```
+- Target ranking in `packages/fcdx/src/target/companies.ts`.
+- Unipile LinkedIn integration in `packages/fcdx/src/unipile/client.ts`.
 
 Main limitation:
 
@@ -1113,7 +1131,8 @@ fcdx tag add --company "SMTC" \
 
 ### Enrichment
 
-Move `npm run enrich` into the main CLI eventually:
+Batch enrichment is now under the main CLI as `fcdx enrich file`. Future
+commands can add DB-backed run tracking and list-native enrichment:
 
 ```bash
 fcdx enrich company --company "SMTC"
@@ -1421,7 +1440,7 @@ The ranker should also apply deterministic caps:
 
 ### Phase 1: Clean Up The Current Workflow
 
-- Keep `npm run enrich`, but document it as batch enrichment.
+- Keep `fcdx enrich file` as the file-backed batch enrichment path.
 - Add sub-scores to target alignment.
 - Add `rank-enriched` filters for min manufacturing/procurement/category scores.
 - Add `db schema` and `db status`.

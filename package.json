@@ -1,34 +1,16 @@
 {
-  "name": "datacenter-equipment-company-crawl",
+  "name": "fcdx-workspace",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "bin": {
-    "fcdx": "dist/cli/fcdx.js"
-  },
+  "packageManager": "pnpm@10.24.0",
   "scripts": {
-    "build": "tsc",
-    "fcdx": "tsx src/cli/fcdx.ts",
-    "profile": "tsx src/cli/profile.ts",
-    "filter": "tsx src/cli/filter.ts",
-    "check-domains": "tsx src/cli/check-domains.ts",
-    "enrich": "tsx src/cli/enrich.ts",
-    "pilot": "tsx src/cli/pilot.ts",
-    "agent-pilot": "tsx src/cli/agent-pilot.ts",
-    "check": "tsc --noEmit"
-  },
-  "dependencies": {
-    "@duckdb/node-api": "^1.5.3-r.3",
-    "@hyperbrowser/sdk": "^0.90.4",
-    "commander": "^14.0.2",
-    "csv-parse": "^6.1.0",
-    "dotenv": "^17.2.3",
-    "p-limit": "^7.2.0",
-    "playwright": "^1.61.0"
+    "build": "pnpm --filter @fcdx/cli build",
+    "check": "pnpm --filter @fcdx/cli check",
+    "fcdx": "pnpm --filter @fcdx/cli fcdx",
+    "install-fcdx": "pnpm --filter @fcdx/cli build && node scripts/install-fcdx.mjs"
   },
   "devDependencies": {
-    "@types/node": "^24.10.1",
-    "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }
 }

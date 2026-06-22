@@ -4,15 +4,45 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { Command } from "commander";
-import { DEFAULT_DATASET_PATH } from "../config.js";
+import type { DuckDBConnection } from "@duckdb/node-api";
+import {
+  fcdxConfigPath,
+  loadFcdxConfig,
+  resolveDatasetPath,
+  resolveDbPath,
+  resolveFirecrawlCacheDir,
+  type FcdxConfig,
+} from "../config.js";
 import { appendJsonl } from "../crawl/artifacts.js";
+import type { CandidateCompany } from "../types.js";
 import {
   connectFcdxDb,
-  DEFAULT_DB_PATH,
   initializeFcdxDb,
   queryCompanies,
   upsertFirecrawlCache,
 } from "../db/fcdx.js";
+import {
+  addCompaniesToList,
+  addCompaniesFromJsonlToList,
+  addCompanyQueryToList,
+  addTagToCompany,
+  createList,
+  createTag,
+  deleteList,
+  ensureList,
+  listFields,
+  listLists,
+  listStats,
+  listTags,
+  migrateWorkspace,
+  removeCompanyFromList,
+  removeTagFromCompany,
+  resolveCompanyId,
+  setListFieldValue,
+  showList,
+  tagStats,
+} from "../db/workspace.js";
+import { runBatchEnrichment } from "../enrich/batch.js";
 import { enrichCompanyWithFirecrawl, firecrawlCompanyCacheDir } from "../enrich/firecrawl.js";
 import {
   buildAgentJudgedShortlist,
@@ -39,12 +69,67 @@ const program = new Command()
   .description("Free Company Dataset exploration CLI")
   .version("0.1.0");
 
+const config = program.command("config").description("Manage local FCD-X configuration");
+
+config
+  .command("path")
+  .description("Print the config file path")
+  .action(() => {
+    console.log(fcdxConfigPath());
+  });
+
+config
+  .command("show")
+  .description("Show resolved FCD-X configuration")
+  .action(() => {
+    console.log(
+      JSON.stringify(
+        {
+          configPath: fcdxConfigPath(),
+          config: loadFcdxConfig(),
+          resolved: {
+            dbPath: resolveDbPath(),
+            datasetPath: resolveDatasetPath(),
+            firecrawlCacheDir: resolveFirecrawlCacheDir(),
+          },
+        },
+        null,
+        2,
+      ),
+    );
+  });
+
+config
+  .command("init")
+  .description("Create or update the local FCD-X config JSON")
+  .option("--path <path>", "Config file path", fcdxConfigPath())
+  .option("--db <path>", "Default DuckDB path")
+  .option("--dataset <path>", "Default PDL company CSV path")
+  .option("--firecrawl-cache-dir <path>", "Default Firecrawl filesystem cache root")
+  .option("--force", "Overwrite existing keys with provided values", false)
+  .action(async (options) => {
+    try {
+      const existing = loadFcdxConfig(options.path);
+      const next: FcdxConfig = { ...existing };
+      if (options.force || !next.dbPath) next.dbPath = options.db ?? next.dbPath ?? resolveDbPath();
+      if (options.force || !next.datasetPath) next.datasetPath = options.dataset ?? next.datasetPath ?? resolveDatasetPath();
+      if (options.force || !next.firecrawlCacheDir) {
+        next.firecrawlCacheDir = options.firecrawlCacheDir ?? next.firecrawlCacheDir ?? resolveFirecrawlCacheDir();
+      }
+      await fs.mkdir(path.dirname(options.path), { recursive: true });
+      await fs.writeFile(options.path, `${JSON.stringify(next, null, 2)}\n`, "utf8");
+      console.log(JSON.stringify({ configPath: options.path, config: next }, null, 2));
+    } catch (error) {
+      exitWithError(error);
+    }
+  });
+
 const db = program.command("db").description("DuckDB-backed local cache commands");
 
 db.command("init")
   .description("Import the Free Company Dataset CSV into a local DuckDB database")
-  .option("-i, --input <path>", "PDL company CSV path", DEFAULT_DATASET_PATH)
-  .option("--db <path>", "DuckDB path", DEFAULT_DB_PATH)
+  .option("-i, --input <path>", "PDL company CSV path", resolveDatasetPath())
+  .option("--db <path>", "DuckDB path", resolveDbPath())
   .option("--replace", "Drop and rebuild existing cached tables", false)
   .option("--limit <n>", "Import only N rows for a smoke test", parseIntArg)
   .action(async (options) => {
@@ -61,10 +146,26 @@ db.command("init")
     }
   });
 
+db.command("migrate")
+  .description("Create or update FCD-X workspace tables without touching the source companies table")
+  .option("--db <path>", "DuckDB path", resolveDbPath())
+  .action(async (options) => {
+    const { instance, connection } = await connectFcdxDb(options.db);
+    try {
+      await migrateWorkspace(connection);
+      console.log(JSON.stringify({ dbPath: options.db, migrated: true }, null, 2));
+    } catch (error) {
+      exitWithError(error);
+    } finally {
+      connection.closeSync();
+      instance.closeSync();
+    }
+  });
+
 program
   .command("filterby")
   .description("Filter companies from the DuckDB cache")
-  .option("--db <path>", "DuckDB path", DEFAULT_DB_PATH)
+  .option("--db <path>", "DuckDB path", resolveDbPath())
   .option("--industry <industry...>", "Industry filter; may be repeated or comma-separated")
   .option("--country <country>", "Country filter", "united states")
   .option("--headcount-min <n>", "Minimum employee count", parseIntArg)
@@ -72,8 +173,13 @@ program
   .option("--company <name>", "Company name or website substring")
   .option("--limit <n>", "Maximum rows to return", parseIntArg, 50)
   .option("-o, --output <path>", "Optional JSONL output path")
+  .option("--to-list <name>", "Add all filtered rows to a durable list")
+  .option("--create-list", "Create --to-list when it does not exist", false)
+  .option("--list-description <text>", "Description to use when creating --to-list")
+  .option("--source <source>", "Source/provenance label when adding rows to --to-list")
+  .option("--reason <reason>", "Reason to store on list memberships created by --to-list")
   .action(async (options) => {
-    const { instance, connection } = await connectFcdxDb(options.db, { readOnly: true });
+    const { instance, connection } = await connectFcdxDb(options.db, { readOnly: !options.toList });
     try {
       const rows = await queryCompanies(connection, {
         industry: splitOptionValues(options.industry),
@@ -87,12 +193,23 @@ program
         await fs.mkdir(path.dirname(options.output), { recursive: true });
         await fs.writeFile(options.output, rows.map((row) => JSON.stringify(row)).join("\n") + (rows.length ? "\n" : ""), "utf8");
       }
+      const listResult = options.toList
+        ? await addFilteredRowsToList(connection, {
+            listName: options.toList,
+            rows,
+            createList: options.createList,
+            description: options.listDescription,
+            source: options.source,
+            reason: options.reason,
+          })
+        : undefined;
       console.log(
         JSON.stringify(
           {
             dbPath: options.db,
             rows: rows.length,
             output: options.output,
+            list: listResult,
             companies: options.output ? rows.slice(0, 10) : rows,
           },
           null,
@@ -111,9 +228,9 @@ program
   .command("crawl")
   .description("Enrich one company with Firecrawl, using the local filesystem cache")
   .requiredOption("--company <name>", "Company name or website substring")
-  .option("--db <path>", "DuckDB path", DEFAULT_DB_PATH)
+  .option("--db <path>", "DuckDB path", resolveDbPath())
   .option("--country <country>", "Country filter; pass '*' to search globally", "united states")
-  .option("--cache-dir <path>", "Filesystem cache root", "output/cache/firecrawl")
+  .option("--cache-dir <path>", "Filesystem cache root", resolveFirecrawlCacheDir())
   .option("-o, --output <path>", "Append enriched JSONL output", "output/enriched/fcdx-crawl.jsonl")
   .option("--timeout-ms <n>", "Per-company Firecrawl timeout", parseIntArg, 120_000)
   .option("--force-refresh", "Bypass cached Firecrawl payload and spend a fresh request", false)
@@ -145,6 +262,429 @@ program
         elapsedMs: result.agent_metadata.elapsed_ms,
       });
       console.log(JSON.stringify({ output: options.output, company: company.name, cacheDir: firecrawlCompanyCacheDir(company, options.cacheDir), error: result.agent_metadata.error }, null, 2));
+    } catch (error) {
+      exitWithError(error);
+    } finally {
+      connection.closeSync();
+      instance.closeSync();
+    }
+  });
+
+const enrich = program.command("enrich").description("Batch Firecrawl enrichment over candidate JSONL");
+
+enrich
+  .command("file")
+  .alias("jsonl")
+  .description("Enrich companies from a candidate JSONL file and write file-backed JSONL/CSV outputs")
+  .option("-i, --input <path>", "Candidate JSONL path", "output/candidates/strict.jsonl")
+  .option("-o, --output <path>", "Output enriched JSONL path", "output/enriched/enriched.jsonl")
+  .option("--summary <path>", "Output summary JSON path", "output/enriched/summary.json")
+  .option("--csv-output <path>", "Optional flattened CSV output path")
+  .option("--limit <n>", "Maximum companies to enrich", parseIntArg)
+  .option("--offset <n>", "Skip this many candidates before enriching", parseIntArg, 0)
+  .option("--concurrency <n>", "Parallel Firecrawl requests", parseIntArg, Number(process.env.CRAWL_CONCURRENCY ?? 2))
+  .option("--timeout-ms <n>", "Per-company Firecrawl timeout", parseIntArg, 120_000)
+  .option("--cache-dir <path>", "Firecrawl filesystem cache root", resolveFirecrawlCacheDir())
+  .option("--force-refresh", "Bypass cached Firecrawl payloads", false)
+  .option("--website <host...>", "Only enrich candidates matching these websites/domains")
+  .option("--resume", "Keep existing output JSONL and skip source ids already present", false)
+  .option("--progress-every <n>", "Log progress every N completed companies", parseIntArg, 25)
+  .action(async (options) => {
+    try {
+      if (!process.env.FIRECRAWL_API_KEY) throw new Error("FIRECRAWL_API_KEY is required");
+      const summary = await runBatchEnrichment({
+        apiKey: process.env.FIRECRAWL_API_KEY,
+        input: options.input,
+        output: options.output,
+        summary: options.summary,
+        csvOutput: options.csvOutput,
+        limit: options.limit,
+        offset: options.offset,
+        concurrency: options.concurrency,
+        timeoutMs: options.timeoutMs,
+        cacheDir: options.cacheDir,
+        forceRefresh: options.forceRefresh,
+        website: options.website,
+        resume: options.resume,
+        progressEvery: options.progressEvery,
+      });
+      console.log(JSON.stringify(summary, null, 2));
+    } catch (error) {
+      exitWithError(error);
+    }
+  });
+
+const list = program.command("list").description("Create and manage durable company lists");
+
+list
+  .command("create <name>")
+  .description("Create a durable list without modifying the source companies table")
+  .option("--db <path>", "DuckDB path", resolveDbPath())
+  .option("--description <text>", "List description")
+  .option("--metadata-json <json>", "Optional JSON metadata for the list")
+  .action(async (name, options) => {
+    const { instance, connection } = await connectFcdxDb(options.db);
+    try {
+      const created = await createList(connection, {
+        name,
+        description: options.description,
+        metadata: parseJsonOption(options.metadataJson),
+      });
+      console.log(JSON.stringify({ list: created }, null, 2));
+    } catch (error) {
+      exitWithError(error);
+    } finally {
+      connection.closeSync();
+      instance.closeSync();
+    }
+  });
+
+list
+  .command("ls")
+  .alias("list")
+  .description("List durable company lists")
+  .option("--db <path>", "DuckDB path", resolveDbPath())
+  .action(async (options) => {
+    const { instance, connection } = await connectFcdxDb(options.db);
+    try {
+      console.log(JSON.stringify({ lists: await listLists(connection) }, null, 2));
+    } catch (error) {
+      exitWithError(error);
+    } finally {
+      connection.closeSync();
+      instance.closeSync();
+    }
+  });
+
+list
+  .command("delete <name>")
+  .description("Delete a list and its list-specific fields; does not delete companies")
+  .option("--db <path>", "DuckDB path", resolveDbPath())
+  .option("--yes", "Confirm deletion", false)
+  .action(async (name, options) => {
+    if (!options.yes) throw new Error("Refusing to delete without --yes");
+    const { instance, connection } = await connectFcdxDb(options.db);
+    try {
+      console.log(JSON.stringify({ deleted: await deleteList(connection, name) }, null, 2));
+    } catch (error) {
+      exitWithError(error);
+    } finally {
+      connection.closeSync();
+      instance.closeSync();
+    }
+  });
+
+list
+  .command("add <name>")
+  .description("Add companies to a list by company query, company id, or candidate JSONL")
+  .option("--db <path>", "DuckDB path", resolveDbPath())
+  .option("--company <name>", "Company name, website, or LinkedIn substring to add")
+  .option("--company-id <id>", "Exact company id to add")
+  .option("--from-jsonl <path>", "Candidate JSONL file to add")
+  .option("--country <country>", "Country filter for --company; pass '*' to search globally", "united states")
+  .option("--limit <n>", "Max companies to add for --company or --from-jsonl", parseIntArg)
+  .option("--source <source>", "Source/provenance label for membership")
+  .option("--reason <reason>", "Reason this company/list batch was added")
+  .action(async (name, options) => {
+    const { instance, connection } = await connectFcdxDb(options.db);
+    try {
+      const country = options.country === "*" ? undefined : options.country;
+      if (options.fromJsonl) {
+        const result = await addCompaniesFromJsonlToList(connection, {
+          listName: name,
+          pathname: options.fromJsonl,
+          source: options.source,
+          reason: options.reason,
+          limit: options.limit,
+        });
+        console.log(JSON.stringify(result, null, 2));
+        return;
+      }
+      if (options.companyId) {
+        const company = await resolveCompanyId(connection, { companyId: options.companyId });
+        const result = await addCompaniesToList(connection, {
+          listName: name,
+          companies: [company],
+          source: options.source ?? "company-id",
+          reason: options.reason ?? options.companyId,
+        });
+        console.log(JSON.stringify({ ...result, matches: [company] }, null, 2));
+        return;
+      }
+      if (options.company) {
+        const result = await addCompanyQueryToList(connection, {
+          listName: name,
+          company: options.company,
+          country,
+          source: options.source,
+          reason: options.reason,
+          limit: options.limit ?? 1,
+        });
+        console.log(JSON.stringify(result, null, 2));
+        return;
+      }
+      throw new Error("Provide --company, --company-id, or --from-jsonl");
+    } catch (error) {
+      exitWithError(error);
+    } finally {
+      connection.closeSync();
+      instance.closeSync();
+    }
+  });
+
+list
+  .command("remove <name>")
+  .description("Remove a company from a list without deleting the source company")
+  .option("--db <path>", "DuckDB path", resolveDbPath())
+  .option("--company <name>", "Company name, website, or LinkedIn substring")
+  .option("--company-id <id>", "Exact company id")
+  .option("--country <country>", "Country filter for --company; pass '*' to search globally", "united states")
+  .action(async (name, options) => {
+    const { instance, connection } = await connectFcdxDb(options.db);
+    try {
+      const country = options.country === "*" ? undefined : options.country;
+      const company = await resolveCompanyId(connection, {
+        companyId: options.companyId,
+        company: options.company,
+        country,
+      });
+      console.log(JSON.stringify(await removeCompanyFromList(connection, { listName: name, companyId: company.id }), null, 2));
+    } catch (error) {
+      exitWithError(error);
+    } finally {
+      connection.closeSync();
+      instance.closeSync();
+    }
+  });
+
+list
+  .command("show <name>")
+  .description("Show list members with list-specific fields and global tags")
+  .option("--db <path>", "DuckDB path", resolveDbPath())
+  .option("--limit <n>", "Maximum rows to show", parseIntArg, 50)
+  .action(async (name, options) => {
+    const { instance, connection } = await connectFcdxDb(options.db);
+    try {
+      console.log(JSON.stringify(await showList(connection, { listName: name, limit: options.limit }), null, 2));
+    } catch (error) {
+      exitWithError(error);
+    } finally {
+      connection.closeSync();
+      instance.closeSync();
+    }
+  });
+
+list
+  .command("stats <name>")
+  .description("Summarize list membership by industry, size, tags, and list-specific fields")
+  .option("--db <path>", "DuckDB path", resolveDbPath())
+  .action(async (name, options) => {
+    const { instance, connection } = await connectFcdxDb(options.db);
+    try {
+      console.log(JSON.stringify(await listStats(connection, name), null, 2));
+    } catch (error) {
+      exitWithError(error);
+    } finally {
+      connection.closeSync();
+      instance.closeSync();
+    }
+  });
+
+list
+  .command("set-field <name>")
+  .description("Set a list-specific field value for one company, e.g. ceo_name or ceo_linkedin_url")
+  .requiredOption("--field <key>", "List field key")
+  .requiredOption("--value <value>", "Field value; use --json-value for structured JSON")
+  .option("--db <path>", "DuckDB path", resolveDbPath())
+  .option("--company <name>", "Company name, website, or LinkedIn substring")
+  .option("--company-id <id>", "Exact company id")
+  .option("--country <country>", "Country filter for --company; pass '*' to search globally", "united states")
+  .option("--type <type>", "Field type, e.g. string, url, person, number, boolean")
+  .option("--description <text>", "Field description")
+  .option("--source <source>", "Source/provenance label for the field value")
+  .option("--confidence <n>", "Confidence from 0 to 1", parseFloatArg)
+  .option("--json-value", "Parse --value as JSON", false)
+  .action(async (name, options) => {
+    const { instance, connection } = await connectFcdxDb(options.db);
+    try {
+      const country = options.country === "*" ? undefined : options.country;
+      const company = await resolveCompanyId(connection, {
+        companyId: options.companyId,
+        company: options.company,
+        country,
+      });
+      console.log(
+        JSON.stringify(
+          await setListFieldValue(connection, {
+            listName: name,
+            companyId: company.id,
+            fieldKey: options.field,
+            value: options.jsonValue ? parseJsonOption(options.value) : options.value,
+            fieldType: options.type,
+            description: options.description,
+            source: options.source,
+            confidence: options.confidence,
+          }),
+          null,
+          2,
+        ),
+      );
+    } catch (error) {
+      exitWithError(error);
+    } finally {
+      connection.closeSync();
+      instance.closeSync();
+    }
+  });
+
+list
+  .command("fields <name>")
+  .description("List field definitions and value counts for a list")
+  .option("--db <path>", "DuckDB path", resolveDbPath())
+  .action(async (name, options) => {
+    const { instance, connection } = await connectFcdxDb(options.db);
+    try {
+      console.log(JSON.stringify(await listFields(connection, name), null, 2));
+    } catch (error) {
+      exitWithError(error);
+    } finally {
+      connection.closeSync();
+      instance.closeSync();
+    }
+  });
+
+const tag = program.command("tag").description("Create and manage durable company tags");
+
+tag
+  .command("create <name>")
+  .description("Create a tag definition")
+  .option("--db <path>", "DuckDB path", resolveDbPath())
+  .option("--description <text>", "Tag description")
+  .option("--metadata-json <json>", "Optional JSON metadata for the tag")
+  .action(async (name, options) => {
+    const { instance, connection } = await connectFcdxDb(options.db);
+    try {
+      console.log(
+        JSON.stringify(
+          { tag: await createTag(connection, { name, description: options.description, metadata: parseJsonOption(options.metadataJson) }) },
+          null,
+          2,
+        ),
+      );
+    } catch (error) {
+      exitWithError(error);
+    } finally {
+      connection.closeSync();
+      instance.closeSync();
+    }
+  });
+
+tag
+  .command("add")
+  .description("Add a tag to one company")
+  .requiredOption("--tag <name>", "Tag name")
+  .option("--db <path>", "DuckDB path", resolveDbPath())
+  .option("--company <name>", "Company name, website, or LinkedIn substring")
+  .option("--company-id <id>", "Exact company id")
+  .option("--country <country>", "Country filter for --company; pass '*' to search globally", "united states")
+  .option("--value <value>", "Optional tag value")
+  .option("--source <source>", "Source/provenance label")
+  .option("--confidence <n>", "Confidence from 0 to 1", parseFloatArg)
+  .option("--reason <reason>", "Reason for the tag")
+  .action(async (options) => {
+    const { instance, connection } = await connectFcdxDb(options.db);
+    try {
+      const country = options.country === "*" ? undefined : options.country;
+      const company = await resolveCompanyId(connection, {
+        companyId: options.companyId,
+        company: options.company,
+        country,
+      });
+      console.log(
+        JSON.stringify(
+          await addTagToCompany(connection, {
+            companyId: company.id,
+            tagName: options.tag,
+            value: options.value,
+            source: options.source,
+            confidence: options.confidence,
+            reason: options.reason,
+          }),
+          null,
+          2,
+        ),
+      );
+    } catch (error) {
+      exitWithError(error);
+    } finally {
+      connection.closeSync();
+      instance.closeSync();
+    }
+  });
+
+tag
+  .command("remove")
+  .description("Remove a tag from one company")
+  .requiredOption("--tag <name>", "Tag name")
+  .option("--db <path>", "DuckDB path", resolveDbPath())
+  .option("--company <name>", "Company name, website, or LinkedIn substring")
+  .option("--company-id <id>", "Exact company id")
+  .option("--country <country>", "Country filter for --company; pass '*' to search globally", "united states")
+  .action(async (options) => {
+    const { instance, connection } = await connectFcdxDb(options.db);
+    try {
+      const country = options.country === "*" ? undefined : options.country;
+      const company = await resolveCompanyId(connection, {
+        companyId: options.companyId,
+        company: options.company,
+        country,
+      });
+      console.log(JSON.stringify(await removeTagFromCompany(connection, { companyId: company.id, tagName: options.tag }), null, 2));
+    } catch (error) {
+      exitWithError(error);
+    } finally {
+      connection.closeSync();
+      instance.closeSync();
+    }
+  });
+
+tag
+  .command("list")
+  .description("List all tags, or tags for one company")
+  .option("--db <path>", "DuckDB path", resolveDbPath())
+  .option("--company <name>", "Company name, website, or LinkedIn substring")
+  .option("--company-id <id>", "Exact company id")
+  .option("--country <country>", "Country filter for --company; pass '*' to search globally", "united states")
+  .action(async (options) => {
+    const { instance, connection } = await connectFcdxDb(options.db);
+    try {
+      if (options.company || options.companyId) {
+        const country = options.country === "*" ? undefined : options.country;
+        const company = await resolveCompanyId(connection, {
+          companyId: options.companyId,
+          company: options.company,
+          country,
+        });
+        console.log(JSON.stringify(await listTags(connection, { companyId: company.id }), null, 2));
+        return;
+      }
+      console.log(JSON.stringify(await listTags(connection), null, 2));
+    } catch (error) {
+      exitWithError(error);
+    } finally {
+      connection.closeSync();
+      instance.closeSync();
+    }
+  });
+
+tag
+  .command("stats")
+  .description("Show tag usage counts")
+  .option("--db <path>", "DuckDB path", resolveDbPath())
+  .action(async (options) => {
+    const { instance, connection } = await connectFcdxDb(options.db);
+    try {
+      console.log(JSON.stringify(await tagStats(connection), null, 2));
     } catch (error) {
       exitWithError(error);
     } finally {
@@ -486,6 +1026,50 @@ function parseIntArg(value: string): number {
   const parsed = Number.parseInt(value, 10);
   if (!Number.isFinite(parsed)) throw new Error(`Invalid integer: ${value}`);
   return parsed;
+}
+
+async function addFilteredRowsToList(
+  connection: DuckDBConnection,
+  input: {
+    listName: string;
+    rows: CandidateCompany[];
+    createList: boolean;
+    description?: string;
+    source?: string;
+    reason?: string;
+  },
+): Promise<unknown> {
+  const ensured = input.createList
+    ? await ensureList(connection, { name: input.listName, description: input.description })
+    : undefined;
+  const result = await addCompaniesToList(connection, {
+    listName: input.listName,
+    companies: input.rows,
+    source: input.source ?? "filterby",
+    reason: input.reason ?? "filterby result",
+  });
+  return {
+    id: result.list.id,
+    name: result.list.name,
+    created: ensured?.created ?? false,
+    added: result.added,
+    existing: result.existing,
+  };
+}
+
+function parseFloatArg(value: string): number {
+  const parsed = Number.parseFloat(value);
+  if (!Number.isFinite(parsed)) throw new Error(`Invalid number: ${value}`);
+  return parsed;
+}
+
+function parseJsonOption(value: string | undefined): unknown {
+  if (value === undefined) return undefined;
+  try {
+    return JSON.parse(value);
+  } catch (error) {
+    throw new Error(`Invalid JSON: ${value}`);
+  }
 }
 
 function splitOptionValues(values: string[] | undefined): string[] | undefined {

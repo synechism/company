@@ -1,32 +1,14 @@
-import "dotenv/config";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import readline from "node:readline";
-import { Command } from "commander";
 import pLimit from "p-limit";
 import type { CandidateCompany, EnrichedCompany } from "../types.js";
 import { appendJsonl, writeJson } from "../crawl/artifacts.js";
-import { enrichCompanyWithFirecrawl } from "../enrich/firecrawl.js";
+import { enrichCompanyWithFirecrawl } from "./firecrawl.js";
 
-const program = new Command()
-  .description("Enrich candidate companies with five structured yes/no research questions.")
-  .option("-i, --input <path>", "Candidate JSONL path", "output/candidates/strict.jsonl")
-  .option("-o, --output <path>", "Output enriched JSONL path", "output/enriched/enriched.jsonl")
-  .option("--summary <path>", "Output summary JSON path", "output/enriched/summary.json")
-  .option("--csv-output <path>", "Optional flattened CSV output path")
-  .option("--limit <n>", "Maximum companies to enrich", parseIntArg)
-  .option("--offset <n>", "Skip this many candidates before enriching", parseIntArg, 0)
-  .option("--concurrency <n>", "Parallel Firecrawl requests", parseIntArg, Number(process.env.CRAWL_CONCURRENCY ?? 2))
-  .option("--timeout-ms <n>", "Per-company Firecrawl timeout", parseIntArg, 120_000)
-  .option("--cache-dir <path>", "Optional Firecrawl filesystem cache root")
-  .option("--force-refresh", "Bypass cached Firecrawl payloads", false)
-  .option("--website <host...>", "Only enrich candidates matching these websites/domains")
-  .option("--resume", "Keep existing output JSONL and skip source ids already present", false)
-  .option("--progress-every <n>", "Log progress every N completed companies", parseIntArg, 25)
-  .parse(process.argv);
-
-const options = program.opts<{
+export type BatchEnrichmentOptions = {
+  apiKey: string;
   input: string;
   output: string;
   summary: string;
@@ -40,73 +22,71 @@ const options = program.opts<{
   website?: string[];
   resume: boolean;
   progressEvery: number;
-}>();
+};
 
-if (!process.env.FIRECRAWL_API_KEY) {
-  throw new Error("FIRECRAWL_API_KEY is required");
+export async function runBatchEnrichment(options: BatchEnrichmentOptions): Promise<unknown> {
+  const completedIds = options.resume ? await readCompletedIds(options.output) : new Set<string>();
+  if (!options.resume) {
+    await fsp.rm(options.output, { force: true });
+    await fsp.rm(options.summary, { force: true });
+    if (options.csvOutput) await fsp.rm(options.csvOutput, { force: true });
+  }
+  await fsp.mkdir(path.dirname(options.output), { recursive: true });
+  await fsp.mkdir(path.dirname(options.summary), { recursive: true });
+
+  const candidates = await readCandidates(options.input, {
+    limit: options.limit,
+    offset: options.offset,
+    websites: options.website,
+    completedIds,
+  });
+  if (candidates.length === 0) {
+    throw new Error(`No candidates selected from ${options.input}`);
+  }
+
+  const started = Date.now();
+  const limit = pLimit(options.concurrency);
+  const results: EnrichedCompany[] = [];
+  let completed = 0;
+  let errorCount = 0;
+
+  await Promise.all(
+    candidates.map((company) =>
+      limit(async () => {
+        const result = await enrichCompanyWithFirecrawl(company, {
+          apiKey: options.apiKey,
+          outputDir: path.dirname(options.output),
+          timeoutMs: options.timeoutMs,
+          cacheDir: options.cacheDir,
+          forceRefresh: options.forceRefresh,
+        });
+        results.push(result);
+        completed += 1;
+        if (result.agent_metadata.error) errorCount += 1;
+        await appendJsonl(options.output, result);
+        if (options.progressEvery > 0 && (completed % options.progressEvery === 0 || completed === candidates.length)) {
+          const elapsedSec = (Date.now() - started) / 1000;
+          const rate = completed / Math.max(1, elapsedSec);
+          const remaining = candidates.length - completed;
+          const etaMin = remaining / Math.max(0.001, rate) / 60;
+          console.error(
+            `enriched ${completed}/${candidates.length} errors=${errorCount} rate=${rate.toFixed(
+              2,
+            )}/s eta=${etaMin.toFixed(1)}m`,
+          );
+        }
+      }),
+    ),
+  );
+
+  const elapsedMs = Date.now() - started;
+  const summary = buildSummary(results, elapsedMs, options);
+  if (options.csvOutput) {
+    await writeCsv(options.csvOutput, results);
+  }
+  await writeJson(options.summary, summary);
+  return summary;
 }
-
-const completedIds = options.resume ? await readCompletedIds(options.output) : new Set<string>();
-if (!options.resume) {
-  await fsp.rm(options.output, { force: true });
-  await fsp.rm(options.summary, { force: true });
-  if (options.csvOutput) await fsp.rm(options.csvOutput, { force: true });
-}
-await fsp.mkdir(path.dirname(options.output), { recursive: true });
-await fsp.mkdir(path.dirname(options.summary), { recursive: true });
-
-const candidates = await readCandidates(options.input, {
-  limit: options.limit,
-  offset: options.offset,
-  websites: options.website,
-  completedIds,
-});
-if (candidates.length === 0) {
-  throw new Error(`No candidates selected from ${options.input}`);
-}
-
-const started = Date.now();
-const limit = pLimit(options.concurrency);
-const results: EnrichedCompany[] = [];
-let completed = 0;
-let errorCount = 0;
-
-await Promise.all(
-  candidates.map((company) =>
-    limit(async () => {
-      const result = await enrichCompanyWithFirecrawl(company, {
-        apiKey: process.env.FIRECRAWL_API_KEY as string,
-        outputDir: path.dirname(options.output),
-        timeoutMs: options.timeoutMs,
-        cacheDir: options.cacheDir,
-        forceRefresh: options.forceRefresh,
-      });
-      results.push(result);
-      completed += 1;
-      if (result.agent_metadata.error) errorCount += 1;
-      await appendJsonl(options.output, result);
-      if (options.progressEvery > 0 && (completed % options.progressEvery === 0 || completed === candidates.length)) {
-        const elapsedSec = (Date.now() - started) / 1000;
-        const rate = completed / Math.max(1, elapsedSec);
-        const remaining = candidates.length - completed;
-        const etaMin = remaining / Math.max(0.001, rate) / 60;
-        console.error(
-          `enriched ${completed}/${candidates.length} errors=${errorCount} rate=${rate.toFixed(
-            2,
-          )}/s eta=${etaMin.toFixed(1)}m`,
-        );
-      }
-    }),
-  ),
-);
-
-const elapsedMs = Date.now() - started;
-const summary = buildSummary(results, elapsedMs, options);
-if (options.csvOutput) {
-  await writeCsv(options.csvOutput, results);
-}
-await writeJson(options.summary, summary);
-console.log(JSON.stringify(summary, null, 2));
 
 async function readCandidates(
   pathname: string,
@@ -320,10 +300,4 @@ function hostKey(urlOrHost: string): string {
   } catch {
     return urlOrHost.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "").toLowerCase();
   }
-}
-
-function parseIntArg(value: string): number {
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed)) throw new Error(`Invalid integer: ${value}`);
-  return parsed;
 }

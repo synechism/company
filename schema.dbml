@@ -1,0 +1,103 @@
+// FCDX Database Schema
+// Generated from fcdx.duckdb
+
+Table companies {
+  id VARCHAR [pk]
+  name VARCHAR
+  website VARCHAR
+  linkedin_url VARCHAR
+  industry VARCHAR
+  size VARCHAR
+  country VARCHAR
+  locality VARCHAR
+  region VARCHAR
+  founded INTEGER
+}
+
+Table tags {
+  id VARCHAR [pk]
+  name VARCHAR [unique, not null]
+  description VARCHAR
+  metadata_json JSON
+  created_at TIMESTAMP
+  updated_at TIMESTAMP
+}
+
+Table company_tags {
+  company_id VARCHAR [pk]
+  tag_id VARCHAR [pk]
+  value VARCHAR
+  source VARCHAR
+  confidence DOUBLE
+  reason VARCHAR
+  created_at TIMESTAMP
+  updated_at TIMESTAMP
+}
+
+Table lists {
+  id VARCHAR [pk]
+  name VARCHAR [unique, not null]
+  description VARCHAR
+  metadata_json JSON
+  created_at TIMESTAMP
+  updated_at TIMESTAMP
+}
+
+Table list_members {
+  list_id VARCHAR [pk]
+  company_id VARCHAR [pk]
+  source VARCHAR
+  reason VARCHAR
+  rank INTEGER
+  score DOUBLE
+  added_at TIMESTAMP
+  updated_at TIMESTAMP
+}
+
+Table list_fields {
+  list_id VARCHAR [pk]
+  field_key VARCHAR [pk]
+  field_type VARCHAR
+  description VARCHAR
+  metadata_json JSON
+  created_at TIMESTAMP
+  updated_at TIMESTAMP
+}
+
+Table list_field_values {
+  list_id VARCHAR [pk]
+  company_id VARCHAR [pk]
+  field_key VARCHAR [pk]
+  value_json JSON
+  source VARCHAR
+  confidence DOUBLE
+  updated_at TIMESTAMP
+}
+
+Table firecrawl_cache {
+  company_id VARCHAR [pk]
+  company_name VARCHAR
+  website VARCHAR
+  url VARCHAR
+  cache_dir VARCHAR
+  raw_output_path VARCHAR
+  final_url VARCHAR
+  title VARCHAR
+  error VARCHAR
+  elapsed_ms BIGINT
+  updated_at TIMESTAMP
+}
+
+// Relationships
+Ref: company_tags.company_id > companies.id
+Ref: company_tags.tag_id > tags.id
+
+Ref: list_members.list_id > lists.id
+Ref: list_members.company_id > companies.id
+
+Ref: list_fields.list_id > lists.id
+
+Ref: list_field_values.(list_id, company_id) > list_members.(list_id, company_id)
+Ref: list_field_values.(list_id, field_key) > list_fields.(list_id, field_key)
+
+Ref: firecrawl_cache.company_id > companies.id

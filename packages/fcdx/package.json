@@ -1,0 +1,25 @@
+{
+  "name": "@fcdx/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "fcdx": "dist/cli/fcdx.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "fcdx": "tsx src/cli/fcdx.ts",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@duckdb/node-api": "^1.5.3-r.3",
+    "commander": "^14.0.2",
+    "dotenv": "^17.2.3",
+    "p-limit": "^7.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

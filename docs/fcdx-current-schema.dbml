@@ -1,0 +1,191 @@
+// FCD-X current implemented DuckDB schema.
+// Generated from packages/fcdx/src/db/fcdx.ts and packages/fcdx/src/db/workspace.ts.
+//
+// Notes:
+// - DuckDB tables currently do not declare foreign key constraints.
+//   The Ref blocks below document the logical/application-level relationships.
+// - Full agent enrichment results are intentionally file-backed JSONL/CSV today.
+//   DuckDB stores source company data, Firecrawl cache metadata, lists, list fields,
+//   tags, and tag mappings.
+
+Project fcdx {
+  database_type: "DuckDB"
+  Note: '''
+    Free Company Dataset exploration workspace.
+
+    Canonical company rows live in companies.
+    Agent/user workspace state lives in separate list and tag tables.
+    Firecrawl raw artifacts and enriched JSONL/CSV live on the filesystem;
+    firecrawl_cache stores cache pointers and crawl metadata.
+  '''
+}
+
+Table companies {
+  country varchar
+  founded integer
+  id varchar [note: "Logical company key; indexed but not declared as a DuckDB primary key"]
+  industry varchar
+  linkedin_url varchar
+  locality varchar
+  name varchar
+  region varchar
+  size varchar
+  website varchar
+
+  indexes {
+    id [name: "companies_id_idx"]
+    name [name: "companies_name_idx"]
+    industry [name: "companies_industry_idx"]
+  }
+
+  Note: '''
+    Imported from the PDL Free Company Dataset CSV.
+    Most text dimensions are lower-cased on import.
+    id is treated as the canonical company identifier in workspace tables.
+  '''
+}
+
+Table firecrawl_cache {
+  company_id varchar [pk]
+  company_name varchar
+  website varchar
+  url varchar
+  cache_dir varchar
+  raw_output_path varchar
+  final_url varchar
+  title varchar
+  error varchar
+  elapsed_ms bigint
+  updated_at timestamp
+
+  Note: '''
+    One latest Firecrawl cache pointer per company.
+    Raw page artifacts are stored on disk under cache_dir, not in DuckDB.
+  '''
+}
+
+Table lists {
+  id varchar [pk]
+  name varchar [unique, not null]
+  description varchar
+  metadata_json json
+  created_at timestamp
+  updated_at timestamp
+
+  Note: '''
+    Durable named company collections.
+    Deleting a list deletes list-local state only; it does not delete companies.
+  '''
+}
+
+Table list_members {
+  list_id varchar [not null]
+  company_id varchar [not null]
+  source varchar
+  reason varchar
+  rank integer
+  score double
+  added_at timestamp
+  updated_at timestamp
+
+  indexes {
+    (list_id, company_id) [pk]
+    company_id [name: "list_members_company_idx"]
+  }
+
+  Note: '''
+    Many-to-many join between lists and companies.
+    source/reason capture provenance for why the company entered the list.
+    rank/score are reserved for list-local ordering/scoring.
+  '''
+}
+
+Table list_fields {
+  list_id varchar [not null]
+  field_key varchar [not null]
+  field_type varchar
+  description varchar
+  metadata_json json
+  created_at timestamp
+  updated_at timestamp
+
+  indexes {
+    (list_id, field_key) [pk]
+  }
+
+  Note: '''
+    Flexible list-local field definitions, e.g. ceo_name, ceo_linkedin_url,
+    agent_fit_score. These do not mutate the canonical companies table.
+  '''
+}
+
+Table list_field_values {
+  list_id varchar [not null]
+  company_id varchar [not null]
+  field_key varchar [not null]
+  value_json json
+  source varchar
+  confidence double
+  updated_at timestamp
+
+  indexes {
+    (list_id, company_id, field_key) [pk]
+    company_id [name: "list_field_values_company_idx"]
+  }
+
+  Note: '''
+    Per-company values for list-local fields.
+    Scoped by list_id so different lists can store different values
+    for the same company and field_key.
+  '''
+}
+
+Table tags {
+  id varchar [pk]
+  name varchar [unique, not null]
+  description varchar
+  metadata_json json
+  created_at timestamp
+  updated_at timestamp
+
+  Note: '''
+    Global tag definitions.
+    Tags represent reusable knowledge that can accumulate across workflows.
+  '''
+}
+
+Table company_tags {
+  company_id varchar [not null]
+  tag_id varchar [not null]
+  value varchar
+  source varchar
+  confidence double
+  reason varchar
+  created_at timestamp
+  updated_at timestamp
+
+  indexes {
+    (company_id, tag_id) [pk]
+    tag_id [name: "company_tags_tag_idx"]
+  }
+
+  Note: '''
+    Many-to-many join between companies and global tags.
+    value allows optional tag payloads; source/confidence/reason capture provenance.
+  '''
+}
+
+Ref: firecrawl_cache.company_id > companies.id
+
+Ref: list_members.list_id > lists.id
+Ref: list_members.company_id > companies.id
+
+Ref: list_fields.list_id > lists.id
+
+Ref: list_field_values.list_id > lists.id
+Ref: list_field_values.company_id > companies.id
+Ref: list_field_values.(list_id, field_key) > list_fields.(list_id, field_key)
+Ref: list_field_values.(list_id, company_id) > list_members.(list_id, company_id)
+
+Ref: company_tags.company_id > companies.id
+Ref: company_tags.tag_id > tags.id
