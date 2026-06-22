@@ -6,6 +6,11 @@
   "bin": {
     "fcdx": "dist/cli/fcdx.js"
   },
+  "files": [
+    "dist",
+    "data",
+    "package.json"
+  ],
   "scripts": {
     "build": "tsc",
     "fcdx": "tsx src/cli/fcdx.ts",

@@ -132,6 +132,20 @@ pnpm install-fcdx
 
 `pnpm install-fcdx` builds `packages/fcdx/dist/cli/fcdx.js` and symlinks it into
 a stable writable PATH directory, preferring the active Node/NVM bin directory.
+It also creates an FCD-X data home and config file:
+
+```text
+~/.local/share/fcdx/fcdx.duckdb
+~/.local/share/fcdx/cache/firecrawl
+~/.config/fcdx/config.json
+```
+
+If `packages/fcdx/data/free_company_dataset.parquet` exists, or
+`FCDX_INSTALL_PARQUET` points at a Parquet artifact, the installer materializes
+DuckDB from that Parquet and stores the Parquet path in config. The Parquet is
+not copied into the data home unless `FCDX_INSTALL_COPY_PARQUET=1` is set. If no
+Parquet is available, the installer preserves existing config and reports that
+the DB was not installed.
 
 ## Adding Commands
 

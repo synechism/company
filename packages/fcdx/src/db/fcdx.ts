@@ -19,7 +19,8 @@ export type CompanyQuery = {
 
 export type DbInitOptions = {
   dbPath: string;
-  csvPath: string;
+  sourcePath: string;
+  sourceType: "csv" | "parquet";
   replace: boolean;
   limit?: number;
 };
@@ -39,53 +40,20 @@ export async function initializeFcdxDb(options: DbInitOptions): Promise<Record<s
   const { instance, connection } = await connectFcdxDb(options.dbPath);
   try {
     if (options.replace) {
+      await dropWorkspaceSchema(connection);
       await connection.run("DROP TABLE IF EXISTS companies");
       await connection.run("DROP TABLE IF EXISTS firecrawl_cache");
     }
 
-    const limitSql = options.limit === undefined ? "" : ` LIMIT ${asPositiveInt(options.limit)}`;
-    await connection.run(`
-      CREATE TABLE IF NOT EXISTS companies AS
-      SELECT
-        lower(country) AS country,
-        try_cast(founded AS INTEGER) AS founded,
-        id,
-        lower(industry) AS industry,
-        linkedin_url,
-        lower(locality) AS locality,
-        lower(name) AS name,
-        lower(region) AS region,
-        size,
-        website
-      FROM read_csv(
-        '${escapeSqlString(options.csvPath)}',
-        header = true,
-        columns = {
-          'country': 'VARCHAR',
-          'founded': 'VARCHAR',
-          'id': 'VARCHAR',
-          'industry': 'VARCHAR',
-          'linkedin_url': 'VARCHAR',
-          'locality': 'VARCHAR',
-          'name': 'VARCHAR',
-          'region': 'VARCHAR',
-          'size': 'VARCHAR',
-          'website': 'VARCHAR'
-        },
-        ignore_errors = true,
-        null_padding = true,
-        strict_mode = false,
-        parallel = false
-      )
-      ${limitSql}
-    `);
+    await connection.run(buildCreateCompaniesSql(options));
 
     await ensureSchema(connection);
 
     const rows = await one(connection, "SELECT count(*)::BIGINT AS count FROM companies");
     return {
       dbPath: options.dbPath,
-      csvPath: options.csvPath,
+      sourcePath: options.sourcePath,
+      sourceType: options.sourceType,
       companies: Number(rows?.count ?? 0),
       elapsedSec: Number(((Date.now() - started) / 1000).toFixed(2)),
     };
@@ -93,6 +61,81 @@ export async function initializeFcdxDb(options: DbInitOptions): Promise<Record<s
     connection.closeSync();
     instance.closeSync();
   }
+}
+
+export async function exportCompaniesParquet(options: {
+  dbPath: string;
+  outputPath: string;
+  compression?: "zstd" | "snappy" | "uncompressed";
+}): Promise<Record<string, unknown>> {
+  const started = Date.now();
+  await fs.mkdir(path.dirname(options.outputPath), { recursive: true });
+  const { instance, connection } = await connectFcdxDb(options.dbPath);
+  try {
+    const compression = (options.compression ?? "zstd").toUpperCase();
+    await connection.run(`
+      COPY (
+        SELECT country, founded, id, industry, linkedin_url, locality, name, region, size, website
+        FROM companies
+      )
+      TO '${escapeSqlString(options.outputPath)}'
+      (FORMAT PARQUET, COMPRESSION ${compression})
+    `);
+    const stat = await fs.stat(options.outputPath);
+    return {
+      dbPath: options.dbPath,
+      outputPath: options.outputPath,
+      bytes: stat.size,
+      elapsedSec: Number(((Date.now() - started) / 1000).toFixed(2)),
+    };
+  } finally {
+    connection.closeSync();
+    instance.closeSync();
+  }
+}
+
+function buildCreateCompaniesSql(options: DbInitOptions): string {
+  const limitSql = options.limit === undefined ? "" : ` LIMIT ${asPositiveInt(options.limit)}`;
+  const sourceSql =
+    options.sourceType === "parquet"
+      ? `read_parquet('${escapeSqlString(options.sourcePath)}')`
+      : `read_csv(
+          '${escapeSqlString(options.sourcePath)}',
+          header = true,
+          columns = {
+            'country': 'VARCHAR',
+            'founded': 'VARCHAR',
+            'id': 'VARCHAR',
+            'industry': 'VARCHAR',
+            'linkedin_url': 'VARCHAR',
+            'locality': 'VARCHAR',
+            'name': 'VARCHAR',
+            'region': 'VARCHAR',
+            'size': 'VARCHAR',
+            'website': 'VARCHAR'
+          },
+          ignore_errors = true,
+          null_padding = true,
+          strict_mode = false,
+          parallel = false
+        )`;
+
+  return `
+    CREATE TABLE IF NOT EXISTS companies AS
+    SELECT
+      lower(country) AS country,
+      try_cast(founded AS INTEGER) AS founded,
+      id,
+      lower(industry) AS industry,
+      linkedin_url,
+      lower(locality) AS locality,
+      lower(name) AS name,
+      lower(region) AS region,
+      size,
+      website
+    FROM ${sourceSql}
+    ${limitSql}
+  `;
 }
 
 export async function ensureSchema(connection: DuckDBConnection): Promise<void> {
@@ -191,6 +234,15 @@ export async function ensureWorkspaceSchema(connection: DuckDBConnection): Promi
     )
   `);
   await connection.run("CREATE INDEX IF NOT EXISTS company_tags_tag_idx ON company_tags(tag_id)");
+}
+
+async function dropWorkspaceSchema(connection: DuckDBConnection): Promise<void> {
+  await connection.run("DROP TABLE IF EXISTS list_field_values");
+  await connection.run("DROP TABLE IF EXISTS list_fields");
+  await connection.run("DROP TABLE IF EXISTS list_members");
+  await connection.run("DROP TABLE IF EXISTS lists");
+  await connection.run("DROP TABLE IF EXISTS company_tags");
+  await connection.run("DROP TABLE IF EXISTS tags");
 }
 
 export async function queryCompanies(

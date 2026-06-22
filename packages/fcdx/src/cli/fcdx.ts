@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 import "dotenv/config";
+import { createWriteStream } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import { Command } from "commander";
 import type { DuckDBConnection } from "@duckdb/node-api";
 import {
@@ -11,12 +14,14 @@ import {
   resolveDatasetPath,
   resolveDbPath,
   resolveFirecrawlCacheDir,
+  resolveParquetPath,
   type FcdxConfig,
 } from "../config.js";
 import { appendJsonl } from "../crawl/artifacts.js";
 import type { CandidateCompany } from "../types.js";
 import {
   connectFcdxDb,
+  exportCompaniesParquet,
   initializeFcdxDb,
   queryCompanies,
   upsertFirecrawlCache,
@@ -90,6 +95,7 @@ config
           resolved: {
             dbPath: resolveDbPath(),
             datasetPath: resolveDatasetPath(),
+            parquetPath: resolveParquetPath(),
             firecrawlCacheDir: resolveFirecrawlCacheDir(),
           },
         },
@@ -105,6 +111,7 @@ config
   .option("--path <path>", "Config file path", fcdxConfigPath())
   .option("--db <path>", "Default DuckDB path")
   .option("--dataset <path>", "Default PDL company CSV path")
+  .option("--parquet <path>", "Default PDL company Parquet path")
   .option("--firecrawl-cache-dir <path>", "Default Firecrawl filesystem cache root")
   .option("--force", "Overwrite existing keys with provided values", false)
   .action(async (options) => {
@@ -113,6 +120,7 @@ config
       const next: FcdxConfig = { ...existing };
       if (options.force || !next.dbPath) next.dbPath = options.db ?? next.dbPath ?? resolveDbPath();
       if (options.force || !next.datasetPath) next.datasetPath = options.dataset ?? next.datasetPath ?? resolveDatasetPath();
+      if (options.force || !next.parquetPath) next.parquetPath = options.parquet ?? next.parquetPath ?? resolveParquetPath();
       if (options.force || !next.firecrawlCacheDir) {
         next.firecrawlCacheDir = options.firecrawlCacheDir ?? next.firecrawlCacheDir ?? resolveFirecrawlCacheDir();
       }
@@ -124,21 +132,94 @@ config
     }
   });
 
+program
+  .command("setup")
+  .description("Materialize a local DuckDB from a shipped/downloaded Parquet artifact and write config")
+  .option("--config <path>", "Config file path", fcdxConfigPath())
+  .option("--db <path>", "DuckDB path to create/use", resolveDbPath())
+  .option("--parquet <path>", "Local PDL company Parquet path", resolveParquetPath())
+  .option("--parquet-url <url>", "Download Parquet from URL before importing")
+  .option("--csv <path>", "Fallback PDL company CSV path", resolveDatasetPath())
+  .option("--firecrawl-cache-dir <path>", "Firecrawl filesystem cache root", resolveFirecrawlCacheDir())
+  .option("--download-to <path>", "Where to store --parquet-url", resolveParquetPath() ?? path.join(process.cwd(), "data", "free_company_dataset.parquet"))
+  .option("--replace", "Drop and rebuild existing cached tables", false)
+  .option("--limit <n>", "Import only N rows for a smoke test", parseIntArg)
+  .action(async (options) => {
+    try {
+      const configPath = path.resolve(options.config);
+      const dbPath = path.resolve(options.db);
+      const firecrawlCacheDir = path.resolve(options.firecrawlCacheDir);
+      const parquetPath = options.parquetUrl
+        ? await downloadParquet(options.parquetUrl, path.resolve(options.downloadTo))
+        : options.parquet ? path.resolve(options.parquet) : undefined;
+      const sourcePath = parquetPath || path.resolve(options.csv);
+      const sourceType = parquetPath ? "parquet" : "csv";
+      if (!sourcePath) throw new Error("Provide --parquet, --parquet-url, or --csv");
+      await fs.access(sourcePath);
+
+      const summary = await initializeFcdxDb({
+        dbPath,
+        sourcePath,
+        sourceType,
+        replace: options.replace,
+        limit: options.limit,
+      });
+
+      const existing = loadFcdxConfig(configPath);
+      const next: FcdxConfig = {
+        ...existing,
+        dbPath,
+        datasetPath: sourceType === "csv" ? sourcePath : path.resolve(options.csv),
+        parquetPath: sourceType === "parquet" ? sourcePath : existing.parquetPath,
+        firecrawlCacheDir,
+      };
+      await fs.mkdir(path.dirname(configPath), { recursive: true });
+      await fs.writeFile(configPath, `${JSON.stringify(next, null, 2)}\n`, "utf8");
+      console.log(JSON.stringify({ configPath, config: next, import: summary }, null, 2));
+    } catch (error) {
+      exitWithError(error);
+    }
+  });
+
 const db = program.command("db").description("DuckDB-backed local cache commands");
 
 db.command("init")
-  .description("Import the Free Company Dataset CSV into a local DuckDB database")
+  .description("Import the Free Company Dataset CSV or Parquet into a local DuckDB database")
   .option("-i, --input <path>", "PDL company CSV path", resolveDatasetPath())
+  .option("--parquet <path>", "PDL company Parquet path", resolveParquetPath())
   .option("--db <path>", "DuckDB path", resolveDbPath())
   .option("--replace", "Drop and rebuild existing cached tables", false)
   .option("--limit <n>", "Import only N rows for a smoke test", parseIntArg)
   .action(async (options) => {
     try {
+      const sourcePath = options.parquet ?? options.input;
       const summary = await initializeFcdxDb({
         dbPath: options.db,
-        csvPath: options.input,
+        sourcePath,
+        sourceType: options.parquet ? "parquet" : "csv",
         replace: options.replace,
         limit: options.limit,
+      });
+      console.log(JSON.stringify(summary, null, 2));
+    } catch (error) {
+      exitWithError(error);
+    }
+  });
+
+db.command("export-parquet")
+  .description("Export the current companies table as a shippable Parquet artifact")
+  .requiredOption("-o, --output <path>", "Output Parquet path")
+  .option("--db <path>", "DuckDB path", resolveDbPath())
+  .option("--compression <type>", "Parquet compression: zstd, snappy, or uncompressed", "zstd")
+  .action(async (options) => {
+    try {
+      if (!["zstd", "snappy", "uncompressed"].includes(options.compression)) {
+        throw new Error("--compression must be zstd, snappy, or uncompressed");
+      }
+      const summary = await exportCompaniesParquet({
+        dbPath: options.db,
+        outputPath: options.output,
+        compression: options.compression,
       });
       console.log(JSON.stringify(summary, null, 2));
     } catch (error) {
@@ -1020,6 +1101,19 @@ function openBrowser(url: string): boolean {
   const args = process.platform === "win32" ? ["/c", "start", "", url] : [url];
   const result = spawnSync(command, args, { stdio: "ignore" });
   return result.status === 0;
+}
+
+async function downloadParquet(url: string, outputPath: string): Promise<string> {
+  await fs.mkdir(path.dirname(outputPath), { recursive: true });
+  const response = await fetch(url);
+  if (!response.ok || !response.body) {
+    throw new Error(`Failed to download Parquet: HTTP ${response.status} ${response.statusText}`);
+  }
+  await pipeline(
+    Readable.fromWeb(response.body as unknown as import("node:stream/web").ReadableStream<Uint8Array>),
+    createWriteStream(outputPath),
+  );
+  return outputPath;
 }
 
 function parseIntArg(value: string): number {

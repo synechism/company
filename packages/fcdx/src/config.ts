@@ -9,6 +9,7 @@ export const DEFAULT_DATASET_PATH =
 export type FcdxConfig = {
   dbPath?: string;
   datasetPath?: string;
+  parquetPath?: string;
   firecrawlCacheDir?: string;
 };
 
@@ -32,6 +33,10 @@ export function resolveDbPath(explicitPath?: string): string {
 
 export function resolveDatasetPath(explicitPath?: string): string {
   return explicitPath || loadFcdxConfig().datasetPath || DEFAULT_DATASET_PATH;
+}
+
+export function resolveParquetPath(explicitPath?: string): string | undefined {
+  return explicitPath || loadFcdxConfig().parquetPath || process.env.FCDX_PARQUET_PATH;
 }
 
 export function resolveFirecrawlCacheDir(explicitPath?: string): string {

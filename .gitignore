@@ -7,3 +7,5 @@ output/
 *.log
 *.tmp
 *.tsbuildinfo
+packages/fcdx/data/*.parquet
+!packages/fcdx/data/.gitkeep

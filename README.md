@@ -10,8 +10,46 @@ pnpm install
 pnpm install-fcdx
 ```
 
-`pnpm install-fcdx` builds the CLI and installs an `fcdx` executable into a
-writable directory on `PATH`, usually the active Node/NVM `bin` directory.
+`pnpm install-fcdx` builds the CLI, installs an `fcdx` executable into a
+writable directory on `PATH`, creates an FCD-X data home, and writes config.
+If a Parquet artifact is available, it also materializes the local DuckDB during
+install.
+
+Installer paths:
+
+- config: `~/.config/fcdx/config.json`
+- data home: `~/.local/share/fcdx`
+- DuckDB: `~/.local/share/fcdx/fcdx.duckdb`
+- Firecrawl cache: `~/.local/share/fcdx/cache/firecrawl`
+- bundled Parquet: kept at its package path by default
+
+To bundle data with the install, put the Parquet artifact at:
+
+```text
+packages/fcdx/data/free_company_dataset.parquet
+```
+
+or point the installer at an external artifact:
+
+```bash
+FCDX_INSTALL_PARQUET=/path/to/free_company_dataset.parquet pnpm install-fcdx
+```
+
+By default, the installer materializes DuckDB from the Parquet in place instead
+of copying the 2GB artifact into the data home. Set `FCDX_INSTALL_COPY_PARQUET=1`
+if you explicitly want a private Parquet copy under the FCD-X data home.
+
+To rebuild an existing installed DB:
+
+```bash
+FCDX_INSTALL_REPLACE_DB=1 FCDX_INSTALL_PARQUET=/path/to/free_company_dataset.parquet pnpm install-fcdx
+```
+
+To generate the shippable Parquet from an existing DuckDB:
+
+```bash
+fcdx db export-parquet --output /path/to/free_company_dataset.parquet
+```
 
 Configure local paths:
 
@@ -19,6 +57,7 @@ Configure local paths:
 fcdx config init \
   --db /home/abhi/data/fcdx.duckdb \
   --dataset /home/abhi/data/free_company_dataset.csv \
+  --parquet /home/abhi/data/free_company_dataset.parquet \
   --firecrawl-cache-dir output/cache/firecrawl
 
 fcdx config show
