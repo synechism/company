@@ -11,6 +11,16 @@ export type FcdxConfig = {
   datasetPath?: string;
   parquetPath?: string;
   firecrawlCacheDir?: string;
+  env?: Record<string, string>;
+  currentProfile?: string;
+  profiles?: Record<string, FcdxProfile>;
+};
+
+export type FcdxProfile = {
+  name?: string;
+  unipileLinkedinAccountId?: string;
+  unipileLinkedinHandle?: string;
+  unipileLinkedinName?: string;
 };
 
 export const DEFAULT_CONFIG_PATH = path.join(os.homedir(), ".config", "fcdx", "config.json");
@@ -27,6 +37,18 @@ export function loadFcdxConfig(configPath = fcdxConfigPath()): FcdxConfig {
   return parsed && typeof parsed === "object" ? parsed : {};
 }
 
+export function saveFcdxConfig(config: FcdxConfig, configPath = fcdxConfigPath()): void {
+  fs.mkdirSync(path.dirname(configPath), { recursive: true });
+  fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+}
+
+export function applyFcdxConfigEnv(configPath = fcdxConfigPath()): void {
+  const config = loadFcdxConfig(configPath);
+  for (const [key, value] of Object.entries(config.env ?? {})) {
+    if (process.env[key] === undefined) process.env[key] = value;
+  }
+}
+
 export function resolveDbPath(explicitPath?: string): string {
   return explicitPath || loadFcdxConfig().dbPath || process.env.FCDX_DB_PATH || DEFAULT_LOCAL_DB_PATH;
 }
@@ -41,6 +63,27 @@ export function resolveParquetPath(explicitPath?: string): string | undefined {
 
 export function resolveFirecrawlCacheDir(explicitPath?: string): string {
   return explicitPath || loadFcdxConfig().firecrawlCacheDir || "output/cache/firecrawl";
+}
+
+export function activeProfileName(config = loadFcdxConfig()): string {
+  return config.currentProfile || "default";
+}
+
+export function activeProfile(config = loadFcdxConfig()): FcdxProfile {
+  return config.profiles?.[activeProfileName(config)] ?? {};
+}
+
+export function setActiveProfile(profileName: string, patch: FcdxProfile, configPath = fcdxConfigPath()): FcdxConfig {
+  const config = loadFcdxConfig(configPath);
+  const profiles = { ...(config.profiles ?? {}) };
+  profiles[profileName] = { ...(profiles[profileName] ?? {}), ...patch, name: patch.name ?? profiles[profileName]?.name ?? profileName };
+  const next = { ...config, currentProfile: profileName, profiles };
+  saveFcdxConfig(next, configPath);
+  return next;
+}
+
+export function resolveConfigEnv(key: string): string | undefined {
+  return process.env[key] || loadFcdxConfig().env?.[key];
 }
 
 export const TARGET_INDUSTRIES = new Set([

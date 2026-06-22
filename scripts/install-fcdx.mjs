@@ -51,6 +51,8 @@ console.log(
         `Run: fcdx config init --dataset /path/to/free_company_dataset.csv --db ${dbPath} --firecrawl-cache-dir ${firecrawlCacheDir} --force`,
         `Or:  fcdx config init --parquet /path/to/free_company_dataset.parquet --db ${dbPath} --firecrawl-cache-dir ${firecrawlCacheDir} --force`,
         "Then run: fcdx db init --replace",
+        "Optional: store service credentials with fcdx config env set FIRECRAWL_API_KEY <key>",
+        "Optional: store LinkedIn credentials with fcdx config env set UNIPILE_ACCESS_TOKEN <token>",
       ],
     },
     null,

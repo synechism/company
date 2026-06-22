@@ -76,11 +76,28 @@ Supported config keys:
 {
   "dbPath": "/home/abhi/data/fcdx.duckdb",
   "datasetPath": "/home/abhi/data/free_company_dataset.csv",
-  "firecrawlCacheDir": "output/cache/firecrawl"
+  "parquetPath": "/home/abhi/data/free_company_dataset.parquet",
+  "firecrawlCacheDir": "output/cache/firecrawl",
+  "env": {
+    "FIRECRAWL_API_KEY": "fc-...",
+    "UNIPILE_BASE_URL": "https://api51.unipile.com:18107",
+    "UNIPILE_ACCESS_TOKEN": "..."
+  },
+  "currentProfile": "default",
+  "profiles": {
+    "default": {
+      "name": "default",
+      "unipileLinkedinAccountId": "...",
+      "unipileLinkedinHandle": "Jane Doe"
+    }
+  }
 }
 ```
 
-`--db` flags still override the configured DB path for one command.
+`--db` flags still override the configured DB path for one command. Config
+environment values are loaded before command execution so installed `fcdx` works
+outside the cloned repo directory. CLI output masks stored secrets and raw
+Unipile account IDs by default.
 
 ## DuckDB Layer
 

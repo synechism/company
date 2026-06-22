@@ -108,7 +108,19 @@ Do not commit `.env` files.
 Filtering, lists, tags, and DuckDB setup are fully local. Crawling, enrichment,
 and LinkedIn lookup require API credentials.
 
-Create a local `.env` file:
+Recommended: store credentials in the FCD-X config file so the installed `fcdx`
+binary works from any directory:
+
+```bash
+fcdx config env set FIRECRAWL_API_KEY fc-...
+fcdx config env set UNIPILE_BASE_URL https://api51.unipile.com:18107
+fcdx config env set UNIPILE_ACCESS_TOKEN <token>
+fcdx config env list
+```
+
+Values are masked by default in `config show` and `config env list`.
+
+You can still use a repo-local `.env` file while developing:
 
 ```bash
 cp .env.example .env
@@ -128,12 +140,22 @@ UNIPILE_ACCESS_TOKEN=...
 You can also pass credentials for a single command:
 
 ```bash
-FIRECRAWL_API_KEY=fc-... fcdx crawl --company='SMTC'
+FIRECRAWL_API_KEY=fc-... fcdx crawl --company SMTC
 ```
 
-The CLI loads `.env` automatically when run from the repo. If `fcdx` is run from
-another directory, either export the variables in your shell or run it from the
-repo root.
+The CLI loads both config-stored env values and repo-local `.env` values. Config
+env is the portable option after installing `fcdx` onto `PATH`.
+
+LinkedIn accounts are stored on local profiles so users do not need to pass raw
+Unipile account IDs:
+
+```bash
+fcdx profile show
+fcdx linkedin auth
+fcdx linkedin accounts
+fcdx linkedin use-account --handle "Jane Doe"
+fcdx linkedin list-profiles --company "cronwell ai" --p CEO --n 5
+```
 
 ## Development
 
@@ -150,8 +172,36 @@ Once installed, use the binary directly:
 ```bash
 fcdx --help
 fcdx list --help
+fcdx list add --help
 fcdx tag --help
+fcdx tag add --help
 fcdx enrich --help
+fcdx enrich file --help
+```
+
+Parent command help shows available subcommands. To see the full option list for
+a subcommand, run help on that exact command, e.g. `fcdx list add --help`,
+`fcdx list set-field --help`, or `fcdx linkedin list-profiles --help`.
+
+## CLI Style
+
+FCD-X examples use a consistent flag style:
+
+- Prefer `--flag value`, not `--flag=value`.
+- Quote values only when they contain spaces, commas, `*`, or shell-sensitive
+  characters.
+- Use repeated flags or comma-separated values when a command says it supports
+  multiple values.
+- Use kebab-case for list names, snake_case for list field names, and namespaced
+  tags such as `buyer:contract_manufacturer`.
+
+Examples:
+
+```bash
+fcdx list add targets --company SMTC
+fcdx linkedin list-profiles --company "cronwell ai" --p CEO --n 5
+fcdx filterby --industry "construction,electrical/electronic manufacturing"
+fcdx list remove targets --company SMTC --country "*"
 ```
 
 ## Core Workflow
@@ -160,8 +210,11 @@ Materialize the PDL CSV or Parquet into DuckDB once:
 
 ```bash
 fcdx db init --replace
-fcdx db migrate
 ```
+
+`db init` also creates the workspace/cache tables. Use `fcdx db migrate` only
+when you already have an existing DuckDB and want to add/update those tables
+without reimporting the dataset.
 
 The default target filter is:
 
@@ -174,10 +227,10 @@ Generate the strict candidate JSONL:
 
 ```bash
 fcdx filterby \
-  --industry='construction,electrical/electronic manufacturing,mechanical or industrial engineering' \
-  --headcount-min=200 \
-  --headcount-max=10000 \
-  --limit=10000 \
+  --industry "construction,electrical/electronic manufacturing,mechanical or industrial engineering" \
+  --headcount-min 200 \
+  --headcount-max 10000 \
+  --limit 10000 \
   --output output/candidates/db-strict.jsonl
 ```
 
@@ -185,10 +238,10 @@ Or filter and save directly into a durable list:
 
 ```bash
 fcdx filterby \
-  --industry='construction,electrical/electronic manufacturing,mechanical or industrial engineering' \
-  --headcount-min=200 \
-  --headcount-max=10000 \
-  --limit=10000 \
+  --industry "construction,electrical/electronic manufacturing,mechanical or industrial engineering" \
+  --headcount-min 200 \
+  --headcount-max 10000 \
+  --limit 10000 \
   --to-list strict-midmarket-candidates \
   --create-list \
   --list-description "US 200-10000 employee candidates from target PDL industries"
@@ -199,7 +252,7 @@ fcdx filterby \
 Single-company crawl/enrichment:
 
 ```bash
-FIRECRAWL_API_KEY=... fcdx crawl --company='SMTC'
+FIRECRAWL_API_KEY=... fcdx crawl --company SMTC
 ```
 
 Batch file-backed enrichment:
@@ -236,9 +289,9 @@ found by LinkedIn, are stored as flexible fields on that list.
 
 ```bash
 fcdx list create thermal-cooling --description "Cooling and thermal targets"
-fcdx list add thermal-cooling --company='SMTC'
+fcdx list add thermal-cooling --company SMTC
 fcdx list add thermal-cooling --from-jsonl output/candidates/db-strict.jsonl --limit 100
-fcdx list set-field thermal-cooling --company='SMTC' --field ceo_name --value 'Jane Doe' --type person
+fcdx list set-field thermal-cooling --company SMTC --field ceo_name --value "Jane Doe" --type person
 fcdx list show thermal-cooling --limit 25
 fcdx list stats thermal-cooling
 ```
@@ -263,8 +316,8 @@ companies.
 
 ```bash
 fcdx tag create buyer:contract_manufacturer --description "Contract manufacturing buyer profile"
-fcdx tag add --company='SMTC' --tag buyer:contract_manufacturer --confidence 0.9 --reason 'EMS target'
-fcdx tag list --company='SMTC'
+fcdx tag add --company SMTC --tag buyer:contract_manufacturer --confidence 0.9 --reason "EMS target"
+fcdx tag list --company SMTC
 fcdx tag stats
 ```
 
@@ -277,8 +330,8 @@ LinkedIn commands use Unipile.
 
 ```bash
 fcdx linkedin auth
-fcdx linkedin list-profiles --company='cronwell ai' --n=5
-fcdx linkedin list-profiles --company='cronwell ai' --p='CEO' --n=5
+fcdx linkedin list-profiles --company "cronwell ai" --n 5
+fcdx linkedin list-profiles --company "cronwell ai" --p CEO --n 5
 ```
 
 ## Target Helpers

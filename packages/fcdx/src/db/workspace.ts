@@ -300,25 +300,13 @@ export async function setListFieldValue(
     confidence?: number;
   },
 ): Promise<{ list: CompanyList; companyId: string; fieldKey: string; value: unknown }> {
-  await ensureWorkspaceSchema(connection);
-  const list = await getListOrThrow(connection, input.listName);
-  await connection.run(
-    `
-    INSERT OR REPLACE INTO list_fields
-      (list_id, field_key, field_type, description, metadata_json, created_at, updated_at)
-    VALUES
-      ($listId, $fieldKey, $fieldType, $description, NULL, coalesce(
-        (SELECT created_at FROM list_fields WHERE list_id = $listId AND field_key = $fieldKey),
-        now()
-      ), now())
-  `,
-    {
-      listId: list.id,
-      fieldKey: input.fieldKey,
-      fieldType: input.fieldType ?? inferFieldType(input.value),
-      description: input.description ?? null,
-    },
-  );
+  const { list } = await defineListField(connection, {
+    listName: input.listName,
+    fieldKey: input.fieldKey,
+    fieldType: input.fieldType,
+    defaultFieldType: inferFieldType(input.value),
+    description: input.description,
+  });
   await connection.run(
     `
     INSERT OR REPLACE INTO list_field_values
@@ -336,6 +324,43 @@ export async function setListFieldValue(
     },
   );
   return { list, companyId: input.companyId, fieldKey: input.fieldKey, value: input.value };
+}
+
+export async function defineListField(
+  connection: DuckDBConnection,
+  input: { listName: string; fieldKey: string; fieldType?: string; defaultFieldType?: string; description?: string },
+): Promise<{ list: CompanyList; fieldKey: string; fieldType: string; values: number }> {
+  await ensureWorkspaceSchema(connection);
+  const list = await getListOrThrow(connection, input.listName);
+  const existing = await one(
+    connection,
+    "SELECT field_type, description FROM list_fields WHERE list_id = $listId AND field_key = $fieldKey",
+    { listId: list.id, fieldKey: input.fieldKey },
+  );
+  const fieldType = input.fieldType ?? (text(existing?.field_type) || input.defaultFieldType || "string");
+  await connection.run(
+    `
+    INSERT OR REPLACE INTO list_fields
+      (list_id, field_key, field_type, description, metadata_json, created_at, updated_at)
+    VALUES
+      ($listId, $fieldKey, $fieldType, $description, NULL, coalesce(
+        (SELECT created_at FROM list_fields WHERE list_id = $listId AND field_key = $fieldKey),
+        now()
+      ), now())
+  `,
+    {
+      listId: list.id,
+      fieldKey: input.fieldKey,
+      fieldType,
+      description: input.description ?? (text(existing?.description) || null),
+    },
+  );
+  const rows = await all(
+    connection,
+    "SELECT count(*)::BIGINT AS count FROM list_field_values WHERE list_id = $listId AND field_key = $fieldKey",
+    { listId: list.id, fieldKey: input.fieldKey },
+  );
+  return { list, fieldKey: input.fieldKey, fieldType, values: Number(rows[0]?.count ?? 0) };
 }
 
 export async function listFields(connection: DuckDBConnection, listName: string): Promise<unknown> {

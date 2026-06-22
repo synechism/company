@@ -6,13 +6,20 @@ import { spawnSync } from "node:child_process";
 import { Command } from "commander";
 import type { DuckDBConnection } from "@duckdb/node-api";
 import {
+  activeProfile,
+  activeProfileName,
+  applyFcdxConfigEnv,
   fcdxConfigPath,
   loadFcdxConfig,
   resolveDatasetPath,
   resolveDbPath,
+  resolveConfigEnv,
   resolveFirecrawlCacheDir,
   resolveParquetPath,
+  saveFcdxConfig,
+  setActiveProfile,
   type FcdxConfig,
+  type FcdxProfile,
 } from "../config.js";
 import { appendJsonl } from "../crawl/artifacts.js";
 import type { CandidateCompany } from "../types.js";
@@ -30,6 +37,7 @@ import {
   addTagToCompany,
   createList,
   createTag,
+  defineListField,
   deleteList,
   ensureList,
   listFields,
@@ -63,19 +71,60 @@ import {
   normalizeLinkedinProfileUrl,
   UnipileApiError,
   UnipileClient,
+  type UnipileAccount,
   type LinkedinSearchProfile,
 } from "../unipile/client.js";
+
+applyFcdxConfigEnv();
 
 const program = new Command()
   .name("fcdx")
   .description("Free Company Dataset exploration CLI")
-  .version("0.1.0");
+  .version("0.1.0")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx config init --parquet /data/free_company_dataset.parquet --force
+  fcdx db init --replace
+  fcdx filterby --industry "construction" --limit 25
+  fcdx list create thermal-cooling
+  fcdx crawl --company "SMTC"
 
-const config = program.command("config").description("Manage local FCD-X configuration");
+Run "fcdx <command> --help" for command-specific examples and options.
+`,
+  );
+
+const config = program
+  .command("config")
+  .description("Manage local FCD-X configuration")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx config init --parquet /data/free_company_dataset.parquet --force
+  fcdx config env set FIRECRAWL_API_KEY fc-...
+  fcdx config env set UNIPILE_BASE_URL https://api51.unipile.com:18107
+  fcdx config env list
+  fcdx config show
+
+Subcommand options:
+  fcdx config init --help
+  fcdx config env set --help
+  fcdx config env list --help
+`,
+  );
 
 config
   .command("path")
   .description("Print the config file path")
+  .addHelpText(
+    "after",
+    `
+Example:
+  fcdx config path
+`,
+  )
   .action(() => {
     console.log(fcdxConfigPath());
   });
@@ -83,12 +132,22 @@ config
 config
   .command("show")
   .description("Show resolved FCD-X configuration")
-  .action(() => {
+  .option("--show-secrets", "Show stored credential values instead of masking them", false)
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx config show
+  fcdx config show --show-secrets
+`,
+  )
+  .action((options) => {
+    const config = loadFcdxConfig();
     console.log(
       JSON.stringify(
         {
           configPath: fcdxConfigPath(),
-          config: loadFcdxConfig(),
+          config: maskConfig(config, { showSecrets: options.showSecrets }),
           resolved: {
             dbPath: resolveDbPath(),
             datasetPath: resolveDatasetPath(),
@@ -111,6 +170,15 @@ config
   .option("--parquet <path>", "Default PDL company Parquet path")
   .option("--firecrawl-cache-dir <path>", "Default Firecrawl filesystem cache root")
   .option("--force", "Overwrite existing keys with provided values", false)
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx config init --parquet /data/free_company_dataset.parquet --force
+  fcdx config init --dataset /data/free_company_dataset.csv --db ~/.local/share/fcdx/fcdx.duckdb --force
+  fcdx config init --firecrawl-cache-dir ~/.local/share/fcdx/cache/firecrawl
+`,
+  )
   .action(async (options) => {
     try {
       const existing = loadFcdxConfig(options.path);
@@ -131,7 +199,165 @@ config
     }
   });
 
-const db = program.command("db").description("DuckDB-backed local cache commands");
+const configEnv = config
+  .command("env")
+  .description("Store and inspect environment-style settings in the FCD-X config file")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx config env set FIRECRAWL_API_KEY fc-...
+  fcdx config env list
+  fcdx config env unset FIRECRAWL_API_KEY
+
+Subcommand options:
+  fcdx config env set --help
+  fcdx config env list --help
+  fcdx config env unset --help
+`,
+  );
+
+configEnv
+  .command("set <name> <value>")
+  .description("Store an environment variable in the FCD-X config, e.g. FIRECRAWL_API_KEY")
+  .option("--path <path>", "Config file path", fcdxConfigPath())
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx config env set FIRECRAWL_API_KEY fc-...
+  fcdx config env set UNIPILE_BASE_URL https://api51.unipile.com:18107
+  fcdx config env set UNIPILE_ACCESS_TOKEN <token>
+`,
+  )
+  .action((name, value, options) => {
+    const current = loadFcdxConfig(options.path);
+    const next: FcdxConfig = { ...current, env: { ...(current.env ?? {}), [name]: value } };
+    saveFcdxConfig(next, options.path);
+    console.log(JSON.stringify({ configPath: options.path, env: { [name]: maskSecret(value) } }, null, 2));
+  });
+
+configEnv
+  .command("unset <name>")
+  .description("Remove an environment variable from the FCD-X config")
+  .option("--path <path>", "Config file path", fcdxConfigPath())
+  .addHelpText(
+    "after",
+    `
+Example:
+  fcdx config env unset FIRECRAWL_API_KEY
+`,
+  )
+  .action((name, options) => {
+    const current = loadFcdxConfig(options.path);
+    const env = { ...(current.env ?? {}) };
+    const existed = Object.prototype.hasOwnProperty.call(env, name);
+    delete env[name];
+    const next: FcdxConfig = { ...current, env };
+    saveFcdxConfig(next, options.path);
+    console.log(JSON.stringify({ configPath: options.path, unset: name, existed }, null, 2));
+  });
+
+configEnv
+  .command("list")
+  .description("List environment variables stored in config; values are masked by default")
+  .option("--path <path>", "Config file path", fcdxConfigPath())
+  .option("--show-secrets", "Print raw secret values", false)
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx config env list
+  fcdx config env list --show-secrets
+`,
+  )
+  .action((options) => {
+    const env = loadFcdxConfig(options.path).env ?? {};
+    const shown = Object.fromEntries(
+      Object.entries(env).map(([key, value]) => [key, options.showSecrets ? value : maskSecret(value)]),
+    );
+    console.log(JSON.stringify({ configPath: options.path, env: shown }, null, 2));
+  });
+
+const profile = program
+  .command("profile")
+  .description("Manage local user profiles, including the default LinkedIn account for this user")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx profile show
+  fcdx profile use tom
+  fcdx linkedin auth --profile tom
+
+Subcommand options:
+  fcdx profile show --help
+  fcdx profile use --help
+`,
+  );
+
+profile
+  .command("show")
+  .description("Show the active local profile; hidden account IDs remain masked")
+  .option("--show-secrets", "Show stored account IDs", false)
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx profile show
+  fcdx profile show --show-secrets
+`,
+  )
+  .action((options) => {
+    const config = loadFcdxConfig();
+    const name = activeProfileName(config);
+    const current = activeProfile(config);
+    console.log(
+      JSON.stringify(
+        {
+          currentProfile: name,
+          profile: options.showSecrets ? current : maskProfile(current),
+        },
+        null,
+        2,
+      ),
+    );
+  });
+
+profile
+  .command("use <name>")
+  .description("Switch the active local profile, creating it if needed")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx profile use default
+  fcdx profile use tom
+`,
+  )
+  .action((name) => {
+    const next = setActiveProfile(name, { name });
+    console.log(JSON.stringify({ currentProfile: activeProfileName(next), profile: maskProfile(activeProfile(next)) }, null, 2));
+  });
+
+const db = program
+  .command("db")
+  .description("DuckDB-backed local cache commands")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx db init --csv /data/free_company_dataset.csv --replace
+  fcdx db init --parquet /data/free_company_dataset.parquet --replace
+  fcdx db migrate
+  fcdx db export-parquet --output /data/free_company_dataset.parquet
+
+Subcommand options:
+  fcdx db init --help
+  fcdx db export-parquet --help
+  fcdx db migrate --help
+`,
+  );
 
 db.command("init")
   .description("Import the Free Company Dataset CSV or Parquet into a local DuckDB database")
@@ -141,6 +367,16 @@ db.command("init")
   .option("--db <path>", "DuckDB path", resolveDbPath())
   .option("--replace", "Drop and rebuild existing cached tables", false)
   .option("--limit <n>", "Import only N rows for a smoke test", parseIntArg)
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx db init --replace
+  fcdx db init --csv /data/free_company_dataset.csv --replace
+  fcdx db init --parquet /data/free_company_dataset.parquet --replace
+  fcdx db init --parquet /data/free_company_dataset.parquet --limit 1000 --replace
+`,
+  )
   .action(async (options) => {
     try {
       const configuredParquet = resolveParquetPath();
@@ -169,6 +405,14 @@ db.command("export-parquet")
   .requiredOption("-o, --output <path>", "Output Parquet path")
   .option("--db <path>", "DuckDB path", resolveDbPath())
   .option("--compression <type>", "Parquet compression: zstd, snappy, or uncompressed", "zstd")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx db export-parquet --output /data/free_company_dataset.parquet
+  fcdx db export-parquet --db ~/.local/share/fcdx/fcdx.duckdb --output /tmp/fcdx.parquet --compression snappy
+`,
+  )
   .action(async (options) => {
     try {
       if (!["zstd", "snappy", "uncompressed"].includes(options.compression)) {
@@ -188,6 +432,13 @@ db.command("export-parquet")
 db.command("migrate")
   .description("Create or update FCD-X workspace tables without touching the source companies table")
   .option("--db <path>", "DuckDB path", resolveDbPath())
+  .addHelpText(
+    "after",
+    `
+Example:
+  fcdx db migrate
+`,
+  )
   .action(async (options) => {
     const { instance, connection } = await connectFcdxDb(options.db);
     try {
@@ -217,6 +468,16 @@ program
   .option("--list-description <text>", "Description to use when creating --to-list")
   .option("--source <source>", "Source/provenance label when adding rows to --to-list")
   .option("--reason <reason>", "Reason to store on list memberships created by --to-list")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx filterby --company "SMTC"
+  fcdx filterby --industry "construction" --headcount-min 200 --headcount-max 10000 --limit 100
+  fcdx filterby --industry "construction,electrical/electronic manufacturing" --output output/candidates/targets.jsonl
+  fcdx filterby --industry "construction" --to-list construction-targets --create-list --limit 500
+`,
+  )
   .action(async (options) => {
     const { instance, connection } = await connectFcdxDb(options.db, { readOnly: !options.toList });
     try {
@@ -273,15 +534,25 @@ program
   .option("-o, --output <path>", "Append enriched JSONL output", "output/enriched/fcdx-crawl.jsonl")
   .option("--timeout-ms <n>", "Per-company Firecrawl timeout", parseIntArg, 120_000)
   .option("--force-refresh", "Bypass cached Firecrawl payload and spend a fresh request", false)
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx crawl --company "SMTC"
+  fcdx crawl --company "SMTC" --country "*" --output output/enriched/smtc.jsonl
+  fcdx crawl --company "SMTC" --force-refresh
+`,
+  )
   .action(async (options) => {
-    if (!process.env.FIRECRAWL_API_KEY) throw new Error("FIRECRAWL_API_KEY is required");
+    const firecrawlApiKey = resolveConfigEnv("FIRECRAWL_API_KEY");
+    if (!firecrawlApiKey) throw new Error("FIRECRAWL_API_KEY is required. Set it with `fcdx config env set FIRECRAWL_API_KEY <key>` or export it.");
     const { instance, connection } = await connectFcdxDb(options.db);
     try {
       const country = options.country === "*" ? undefined : options.country;
       const [company] = await queryCompanies(connection, { company: options.company, country, limit: 1 });
-      if (!company) throw new Error(`No company matched ${options.company}. Try fcdx filterby --company='${options.company}'.`);
+      if (!company) throw new Error(`No company matched ${options.company}. Try: fcdx filterby --company "${options.company}"`);
       const result = await enrichCompanyWithFirecrawl(company, {
-        apiKey: process.env.FIRECRAWL_API_KEY,
+        apiKey: firecrawlApiKey,
         outputDir: path.dirname(options.output),
         timeoutMs: options.timeoutMs,
         cacheDir: options.cacheDir,
@@ -310,6 +581,14 @@ program
   });
 
 const enrich = program.command("enrich").description("Batch Firecrawl enrichment over candidate JSONL");
+enrich.addHelpText(
+  "after",
+  `
+Examples:
+  fcdx enrich file --input output/candidates/targets.jsonl --output output/enriched/targets.jsonl
+  fcdx enrich file --help
+`,
+);
 
 enrich
   .command("file")
@@ -328,11 +607,21 @@ enrich
   .option("--website <host...>", "Only enrich candidates matching these websites/domains")
   .option("--resume", "Keep existing output JSONL and skip source ids already present", false)
   .option("--progress-every <n>", "Log progress every N completed companies", parseIntArg, 25)
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx enrich file --input output/candidates/targets.jsonl --output output/enriched/targets.jsonl --summary output/enriched/targets-summary.json
+  fcdx enrich file --input output/candidates/targets.jsonl --limit 25 --concurrency 5 --resume
+  fcdx enrich file --input output/candidates/targets.jsonl --website smtc.com tateglobal.com
+`,
+  )
   .action(async (options) => {
     try {
-      if (!process.env.FIRECRAWL_API_KEY) throw new Error("FIRECRAWL_API_KEY is required");
+      const firecrawlApiKey = resolveConfigEnv("FIRECRAWL_API_KEY");
+      if (!firecrawlApiKey) throw new Error("FIRECRAWL_API_KEY is required. Set it with `fcdx config env set FIRECRAWL_API_KEY <key>` or export it.");
       const summary = await runBatchEnrichment({
-        apiKey: process.env.FIRECRAWL_API_KEY,
+        apiKey: firecrawlApiKey,
         input: options.input,
         output: options.output,
         summary: options.summary,
@@ -353,7 +642,28 @@ enrich
     }
   });
 
-const list = program.command("list").description("Create and manage durable company lists");
+const list = program
+  .command("list")
+  .description("Create and manage durable company lists")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx list create targets --description "Priority companies"
+  fcdx list add targets --company "SMTC"
+  fcdx list add targets --from-jsonl output/candidates/db-strict.jsonl --limit 100
+  fcdx list set-field targets --field ceo_name --type person
+  fcdx list set-field targets --company "SMTC" --field ceo_name --value "Jane Doe"
+  fcdx list show targets --limit 25
+
+Subcommand options:
+  fcdx list create --help
+  fcdx list add --help
+  fcdx list set-field --help
+  fcdx list show --help
+  fcdx list delete --help
+`,
+  );
 
 list
   .command("create <name>")
@@ -361,6 +671,15 @@ list
   .option("--db <path>", "DuckDB path", resolveDbPath())
   .option("--description <text>", "List description")
   .option("--metadata-json <json>", "Optional JSON metadata for the list")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx list create targets
+  fcdx list create thermal-cooling --description "Cooling and thermal companies"
+  fcdx list create targets --metadata-json '{"owner":"sales","priority":"high"}'
+`,
+  )
   .action(async (name, options) => {
     const { instance, connection } = await connectFcdxDb(options.db);
     try {
@@ -383,6 +702,13 @@ list
   .alias("list")
   .description("List durable company lists")
   .option("--db <path>", "DuckDB path", resolveDbPath())
+  .addHelpText(
+    "after",
+    `
+Example:
+  fcdx list ls
+`,
+  )
   .action(async (options) => {
     const { instance, connection } = await connectFcdxDb(options.db);
     try {
@@ -400,6 +726,13 @@ list
   .description("Delete a list and its list-specific fields; does not delete companies")
   .option("--db <path>", "DuckDB path", resolveDbPath())
   .option("--yes", "Confirm deletion", false)
+  .addHelpText(
+    "after",
+    `
+Example:
+  fcdx list delete targets --yes
+`,
+  )
   .action(async (name, options) => {
     if (!options.yes) throw new Error("Refusing to delete without --yes");
     const { instance, connection } = await connectFcdxDb(options.db);
@@ -424,6 +757,16 @@ list
   .option("--limit <n>", "Max companies to add for --company or --from-jsonl", parseIntArg)
   .option("--source <source>", "Source/provenance label for membership")
   .option("--reason <reason>", "Reason this company/list batch was added")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx list add targets --company "SMTC"
+  fcdx list add targets --company "SMTC" --country "*"
+  fcdx list add targets --company-id pdl_company_id_here
+  fcdx list add targets --from-jsonl output/candidates/db-strict.jsonl --limit 100 --source filterby
+`,
+  )
   .action(async (name, options) => {
     const { instance, connection } = await connectFcdxDb(options.db);
     try {
@@ -478,6 +821,14 @@ list
   .option("--company <name>", "Company name, website, or LinkedIn substring")
   .option("--company-id <id>", "Exact company id")
   .option("--country <country>", "Country filter for --company; pass '*' to search globally", "united states")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx list remove targets --company "SMTC"
+  fcdx list remove targets --company-id pdl_company_id_here
+`,
+  )
   .action(async (name, options) => {
     const { instance, connection } = await connectFcdxDb(options.db);
     try {
@@ -501,6 +852,14 @@ list
   .description("Show list members with list-specific fields and global tags")
   .option("--db <path>", "DuckDB path", resolveDbPath())
   .option("--limit <n>", "Maximum rows to show", parseIntArg, 50)
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx list show targets
+  fcdx list show targets --limit 25
+`,
+  )
   .action(async (name, options) => {
     const { instance, connection } = await connectFcdxDb(options.db);
     try {
@@ -517,6 +876,13 @@ list
   .command("stats <name>")
   .description("Summarize list membership by industry, size, tags, and list-specific fields")
   .option("--db <path>", "DuckDB path", resolveDbPath())
+  .addHelpText(
+    "after",
+    `
+Example:
+  fcdx list stats targets
+`,
+  )
   .action(async (name, options) => {
     const { instance, connection } = await connectFcdxDb(options.db);
     try {
@@ -531,9 +897,9 @@ list
 
 list
   .command("set-field <name>")
-  .description("Set a list-specific field value for one company, e.g. ceo_name or ceo_linkedin_url")
+  .description("Define a list-specific field, or set that field for one company")
   .requiredOption("--field <key>", "List field key")
-  .requiredOption("--value <value>", "Field value; use --json-value for structured JSON")
+  .option("--value <value>", "Field value; use --json-value for structured JSON")
   .option("--db <path>", "DuckDB path", resolveDbPath())
   .option("--company <name>", "Company name, website, or LinkedIn substring")
   .option("--company-id <id>", "Exact company id")
@@ -543,9 +909,42 @@ list
   .option("--source <source>", "Source/provenance label for the field value")
   .option("--confidence <n>", "Confidence from 0 to 1", parseFloatArg)
   .option("--json-value", "Parse --value as JSON", false)
+  .addHelpText(
+    "after",
+    `
+Examples:
+  # Define a field for this list only; no companies get a value yet.
+  fcdx list set-field targets --field ceo_name --type person --description "CEO name"
+
+  # Set the field for one company in this list.
+  fcdx list set-field targets --company "SMTC" --field ceo_name --value "John Stone" --source linkedin
+
+  # Store a structured value.
+  fcdx list set-field targets --company "SMTC" --field ceo --json-value \\
+    --value '{"name":"John Stone","linkedin_url":"https://www.linkedin.com/in/..."}'
+`,
+  )
   .action(async (name, options) => {
     const { instance, connection } = await connectFcdxDb(options.db);
     try {
+      if (!options.value && (options.company || options.companyId)) {
+        throw new Error("Provide --value when setting a field for a company. Omit --company/--company-id to define the field only.");
+      }
+      if (!options.value) {
+        console.log(
+          JSON.stringify(
+            await defineListField(connection, {
+              listName: name,
+              fieldKey: options.field,
+              fieldType: options.type,
+              description: options.description,
+            }),
+            null,
+            2,
+          ),
+        );
+        return;
+      }
       const country = options.country === "*" ? undefined : options.country;
       const company = await resolveCompanyId(connection, {
         companyId: options.companyId,
@@ -580,6 +979,13 @@ list
   .command("fields <name>")
   .description("List field definitions and value counts for a list")
   .option("--db <path>", "DuckDB path", resolveDbPath())
+  .addHelpText(
+    "after",
+    `
+Example:
+  fcdx list fields targets
+`,
+  )
   .action(async (name, options) => {
     const { instance, connection } = await connectFcdxDb(options.db);
     try {
@@ -592,7 +998,25 @@ list
     }
   });
 
-const tag = program.command("tag").description("Create and manage durable company tags");
+const tag = program
+  .command("tag")
+  .description("Create and manage durable company tags")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx tag create buyer:contract_manufacturer --description "Contract manufacturing target"
+  fcdx tag add --company "SMTC" --tag buyer:contract_manufacturer --confidence 0.9
+  fcdx tag list --company "SMTC"
+  fcdx tag stats
+
+Subcommand options:
+  fcdx tag create --help
+  fcdx tag add --help
+  fcdx tag list --help
+  fcdx tag remove --help
+`,
+  );
 
 tag
   .command("create <name>")
@@ -600,6 +1024,15 @@ tag
   .option("--db <path>", "DuckDB path", resolveDbPath())
   .option("--description <text>", "Tag description")
   .option("--metadata-json <json>", "Optional JSON metadata for the tag")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx tag create buyer:contract_manufacturer
+  fcdx tag create category:thermal_cooling --description "Thermal/cooling company"
+  fcdx tag create priority:high --metadata-json '{"owner":"sales"}'
+`,
+  )
   .action(async (name, options) => {
     const { instance, connection } = await connectFcdxDb(options.db);
     try {
@@ -630,6 +1063,15 @@ tag
   .option("--source <source>", "Source/provenance label")
   .option("--confidence <n>", "Confidence from 0 to 1", parseFloatArg)
   .option("--reason <reason>", "Reason for the tag")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx tag add --company "SMTC" --tag buyer:contract_manufacturer
+  fcdx tag add --company "SMTC" --tag category:thermal_cooling --confidence 0.8 --source agent
+  fcdx tag add --company-id pdl_company_id_here --tag priority:high --reason "Strong procurement fit"
+`,
+  )
   .action(async (options) => {
     const { instance, connection } = await connectFcdxDb(options.db);
     try {
@@ -669,6 +1111,14 @@ tag
   .option("--company <name>", "Company name, website, or LinkedIn substring")
   .option("--company-id <id>", "Exact company id")
   .option("--country <country>", "Country filter for --company; pass '*' to search globally", "united states")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx tag remove --company "SMTC" --tag priority:high
+  fcdx tag remove --company-id pdl_company_id_here --tag priority:high
+`,
+  )
   .action(async (options) => {
     const { instance, connection } = await connectFcdxDb(options.db);
     try {
@@ -694,6 +1144,15 @@ tag
   .option("--company <name>", "Company name, website, or LinkedIn substring")
   .option("--company-id <id>", "Exact company id")
   .option("--country <country>", "Country filter for --company; pass '*' to search globally", "united states")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx tag list
+  fcdx tag list --company "SMTC"
+  fcdx tag list --company-id pdl_company_id_here
+`,
+  )
   .action(async (options) => {
     const { instance, connection } = await connectFcdxDb(options.db);
     try {
@@ -720,6 +1179,13 @@ tag
   .command("stats")
   .description("Show tag usage counts")
   .option("--db <path>", "DuckDB path", resolveDbPath())
+  .addHelpText(
+    "after",
+    `
+Example:
+  fcdx tag stats
+`,
+  )
   .action(async (options) => {
     const { instance, connection } = await connectFcdxDb(options.db);
     try {
@@ -732,23 +1198,58 @@ tag
     }
   });
 
-const linkedin = program.command("linkedin").description("LinkedIn workflows backed by Unipile");
+const linkedin = program
+  .command("linkedin")
+  .description("LinkedIn workflows backed by Unipile")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx config env set UNIPILE_BASE_URL https://api51.unipile.com:18107
+  fcdx config env set UNIPILE_ACCESS_TOKEN <token>
+  fcdx linkedin auth
+  fcdx linkedin accounts
+  fcdx linkedin list-profiles --company "cronwell ai" --p CEO --n 5
+
+Subcommand options:
+  fcdx linkedin auth --help
+  fcdx linkedin accounts --help
+  fcdx linkedin use-account --help
+  fcdx linkedin list-profiles --help
+`,
+  );
 
 linkedin
   .command("auth")
   .description("Create a Unipile hosted-auth URL for connecting a LinkedIn account")
-  .option("--base-url <url>", "Unipile DSN/base URL", process.env.UNIPILE_BASE_URL)
-  .option("--access-token <token>", "Unipile access token", process.env.UNIPILE_ACCESS_TOKEN)
+  .option("--base-url <url>", "Unipile DSN/base URL; defaults to config env UNIPILE_BASE_URL")
+  .option("--access-token <token>", "Unipile access token; defaults to config env UNIPILE_ACCESS_TOKEN")
   .option("--expires-minutes <n>", "Hosted-auth link lifetime in minutes", parseIntArg, 60)
   .option("--name <name>", "Optional internal user ID/name echoed by notify_url")
   .option("--notify-url <url>", "Optional webhook URL to receive account_id after success")
   .option("--success-url <url>", "Optional browser redirect URL after success")
   .option("--failure-url <url>", "Optional browser redirect URL after failure")
   .option("--reconnect-account <accountId>", "Reconnect an existing account instead of creating a new one")
+  .option("--profile <name>", "Local FCD-X profile to store the connected LinkedIn account on", activeProfileName())
+  .option("--wait-timeout-seconds <n>", "How long to poll Unipile for the connected account", parseIntArg, 180)
+  .option("--no-wait", "Do not wait for the browser auth flow to complete")
   .option("--no-open", "Print the hosted-auth URL without trying to open a browser")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx linkedin auth
+  fcdx linkedin auth --profile tom
+  fcdx linkedin auth --no-open
+
+After successful auth, FCD-X stores the preferred LinkedIn account ID in the
+local profile, but command output keeps that ID hidden.
+`,
+  )
   .action(async (options) => {
     try {
       const client = createUnipileClient(options);
+      const before = options.wait ? await linkedinAccountIds(client) : new Set<string>();
       const url = await client.createHostedAuthLink({
         type: options.reconnectAccount ? "reconnect" : "create",
         providers: ["LINKEDIN"],
@@ -765,6 +1266,80 @@ linkedin
         const opened = openBrowser(url);
         if (!opened) console.error("Could not open a browser automatically; paste the URL above into a browser.");
       }
+      if (options.wait) {
+        const account = await waitForLinkedinAccount(client, before, options.waitTimeoutSeconds * 1000);
+        if (account) {
+          storeLinkedinAccountOnProfile(options.profile, account);
+          console.error(`LinkedIn account stored on profile "${options.profile}": ${linkedinAccountLabel(account)}`);
+        } else {
+          console.error("Timed out waiting for LinkedIn auth to finish. Re-run `fcdx linkedin auth` or set a profile with `fcdx linkedin use-account`.");
+        }
+      }
+    } catch (error) {
+      exitWithError(error);
+    }
+  });
+
+linkedin
+  .command("accounts")
+  .description("List connected LinkedIn accounts without exposing raw Unipile account IDs")
+  .option("--base-url <url>", "Unipile DSN/base URL; defaults to config env UNIPILE_BASE_URL")
+  .option("--access-token <token>", "Unipile access token; defaults to config env UNIPILE_ACCESS_TOKEN")
+  .option("--json", "Print JSON", false)
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx linkedin accounts
+  fcdx linkedin accounts --json
+`,
+  )
+  .action(async (options) => {
+    try {
+      const client = createUnipileClient(options);
+      const selected = activeProfile().unipileLinkedinAccountId;
+      const accounts = (await client.listAccounts()).filter((account) => account.type === "LINKEDIN");
+      const rows = accounts.map((account) => ({
+        selected: selected === account.id,
+        handle: linkedinAccountHandle(account),
+        name: account.name,
+        label: linkedinAccountLabel(account),
+        status: account.sources?.map((source) => source.status).filter(Boolean).join(", ") || undefined,
+      }));
+      if (options.json) console.log(JSON.stringify({ profile: activeProfileName(), accounts: rows }, null, 2));
+      else {
+        if (rows.length === 0) console.log("No LinkedIn accounts connected. Run `fcdx linkedin auth` first.");
+        for (const row of rows) {
+          console.log(`${row.selected ? "*" : " "}\t${row.handle || "(no handle)"}\t${row.name || ""}\t${row.status || ""}`);
+        }
+      }
+    } catch (error) {
+      exitWithError(error);
+    }
+  });
+
+linkedin
+  .command("use-account")
+  .description("Set the default LinkedIn account for the active local profile")
+  .option("--handle <handle>", "LinkedIn handle/public identifier shown by `fcdx linkedin accounts`")
+  .option("--name <name>", "Connected account display name")
+  .option("--profile <name>", "Local FCD-X profile to update", activeProfileName())
+  .option("--base-url <url>", "Unipile DSN/base URL; defaults to config env UNIPILE_BASE_URL")
+  .option("--access-token <token>", "Unipile access token; defaults to config env UNIPILE_ACCESS_TOKEN")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx linkedin use-account --handle "Jane Doe"
+  fcdx linkedin use-account --name "Jane Doe" --profile sales
+`,
+  )
+  .action(async (options) => {
+    try {
+      const client = createUnipileClient(options);
+      const account = await resolveLinkedinAccountBySafeSelector(client, { handle: options.handle, name: options.name });
+      storeLinkedinAccountOnProfile(options.profile, account);
+      console.log(JSON.stringify({ profile: options.profile, account: publicLinkedinAccount(account) }, null, 2));
     } catch (error) {
       exitWithError(error);
     }
@@ -780,10 +1355,23 @@ linkedin
   .option("--company-id <id...>", "LinkedIn company parameter ID(s) to use as current-company filter")
   .option("--no-resolve-company", "Do not resolve company name to LinkedIn company IDs before searching")
   .option("--show-company-matches", "Print the LinkedIn company parameter matches used for filtering", false)
-  .option("--account-id <accountId>", "Unipile LinkedIn account ID; auto-detected if one LinkedIn account exists")
-  .option("--base-url <url>", "Unipile DSN/base URL", process.env.UNIPILE_BASE_URL)
-  .option("--access-token <token>", "Unipile access token", process.env.UNIPILE_ACCESS_TOKEN)
+  .option("--account-id <accountId>", "Advanced: explicit Unipile LinkedIn account ID; otherwise uses the active profile")
+  .option("--profile <name>", "Local FCD-X profile whose LinkedIn account should be used", activeProfileName())
+  .option("--base-url <url>", "Unipile DSN/base URL; defaults to config env UNIPILE_BASE_URL")
+  .option("--access-token <token>", "Unipile access token; defaults to config env UNIPILE_ACCESS_TOKEN")
   .option("--json", "Print full normalized JSON instead of a table", false)
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx linkedin list-profiles --company "cronwell ai" --n 5
+  fcdx linkedin list-profiles --company "cronwell ai" --p CEO --json
+  fcdx linkedin list-profiles --company "SMTC" --p "Head of Procurement" --n 10
+
+By default this command uses the LinkedIn account stored on the active local
+profile by "fcdx linkedin auth".
+`,
+  )
   .action(async (options) => {
     try {
       if (!["classic", "sales_navigator", "recruiter"].includes(options.api)) {
@@ -791,7 +1379,7 @@ linkedin
       }
 
       const client = createUnipileClient(options);
-      const accountId = await client.resolveLinkedinAccountId(options.accountId);
+      const accountId = await resolveLinkedinAccountForProfile(client, options.profile, options.accountId);
       const companyMatches =
         options.resolveCompany && !options.companyId
           ? await client.searchCompanyParameters({
@@ -826,7 +1414,7 @@ linkedin
 
       const profiles = (response.items ?? []).slice(0, options.n).map(normalizeProfile);
       if (options.json) {
-        console.log(JSON.stringify({ accountId, company: options.company, profiles, rawPaging: response.paging }, null, 2));
+        console.log(JSON.stringify({ profile: options.profile, company: options.company, profiles, rawPaging: response.paging }, null, 2));
         return;
       }
 
@@ -843,7 +1431,23 @@ linkedin
     }
   });
 
-const target = program.command("target").description("Target-category comparison and shortlist commands");
+const target = program
+  .command("target")
+  .description("Target-category comparison and shortlist commands")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx target compare --candidates output/candidates/db-strict.jsonl
+  fcdx target shortlist --candidates output/candidates/db-strict.jsonl --limit 200
+  fcdx target rank-enriched --enriched output/enriched/target-agent-enriched.jsonl --limit 200
+
+Subcommand options:
+  fcdx target compare --help
+  fcdx target shortlist --help
+  fcdx target rank-enriched --help
+`,
+  );
 
 target
   .command("compare")
@@ -852,6 +1456,14 @@ target
   .option("--candidates <path>", "Candidate JSONL path", "output/candidates/db-strict.jsonl")
   .option("-o, --output <path>", "JSON summary output path", "output/target/doc-company-coverage.json")
   .option("--csv-output <path>", "CSV coverage output path", "output/target/doc-company-coverage.csv")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx target compare --candidates output/candidates/db-strict.jsonl
+  fcdx target compare --config config/target_companies_and_categories.json --csv-output output/target/coverage.csv
+`,
+  )
   .action(async (options) => {
     try {
       const config = await readTargetConfig(options.config);
@@ -906,6 +1518,14 @@ target
   .option("--limit <n>", "Number of shortlist rows", parseIntArg, 200)
   .option("-o, --output <path>", "JSONL shortlist output path", "output/target/shortlist-200.jsonl")
   .option("--csv-output <path>", "CSV shortlist output path", "output/target/shortlist-200.csv")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx target shortlist --candidates output/candidates/db-strict.jsonl --limit 200
+  fcdx target shortlist --candidates output/candidates/db-strict.jsonl --enriched output/enriched/electrical800-construction700.jsonl --csv-output output/target/shortlist.csv
+`,
+  )
   .action(async (options) => {
     try {
       const config = await readTargetConfig(options.config);
@@ -957,6 +1577,14 @@ target
   .option("--min-datacenter-fit <n>", "Minimum data-center/critical-infrastructure fit sub-score", parseIntArg)
   .option("-o, --output <path>", "JSONL ranked shortlist output path", "output/target/agent-shortlist-200.jsonl")
   .option("--csv-output <path>", "CSV ranked shortlist output path", "output/target/agent-shortlist-200.csv")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx target rank-enriched --enriched output/enriched/target-agent-enriched.jsonl --limit 200
+  fcdx target rank-enriched --enriched output/enriched/target-agent-enriched.jsonl --min-manufacturing-fit 4 --min-procurement-fit 3
+`,
+  )
   .action(async (options) => {
     try {
       const config = await readTargetConfig(options.config);
@@ -1007,9 +1635,98 @@ target
 await program.parseAsync(process.argv);
 
 function createUnipileClient(options: { baseUrl?: string; accessToken?: string }): UnipileClient {
-  if (!options.baseUrl) throw new Error("UNIPILE_BASE_URL or --base-url is required");
-  if (!options.accessToken) throw new Error("UNIPILE_ACCESS_TOKEN or --access-token is required");
-  return new UnipileClient({ baseUrl: options.baseUrl, accessToken: options.accessToken });
+  const baseUrl = options.baseUrl || resolveConfigEnv("UNIPILE_BASE_URL");
+  const accessToken = options.accessToken || resolveConfigEnv("UNIPILE_ACCESS_TOKEN");
+  if (!baseUrl) throw new Error("UNIPILE_BASE_URL is required. Set it with `fcdx config env set UNIPILE_BASE_URL <url>` or pass --base-url.");
+  if (!accessToken) throw new Error("UNIPILE_ACCESS_TOKEN is required. Set it with `fcdx config env set UNIPILE_ACCESS_TOKEN <token>` or pass --access-token.");
+  return new UnipileClient({ baseUrl, accessToken });
+}
+
+async function resolveLinkedinAccountForProfile(
+  client: UnipileClient,
+  profileName: string,
+  explicitAccountId?: string,
+): Promise<string> {
+  if (explicitAccountId) return explicitAccountId;
+  const config = loadFcdxConfig();
+  const stored = config.profiles?.[profileName]?.unipileLinkedinAccountId;
+  if (stored) return stored;
+  const accountId = await client.resolveLinkedinAccountId();
+  const account = (await client.listAccounts()).find((row) => row.id === accountId);
+  if (account) storeLinkedinAccountOnProfile(profileName, account);
+  return accountId;
+}
+
+async function linkedinAccountIds(client: UnipileClient): Promise<Set<string>> {
+  return new Set((await client.listAccounts()).filter((account) => account.type === "LINKEDIN").map((account) => account.id));
+}
+
+async function waitForLinkedinAccount(
+  client: UnipileClient,
+  before: Set<string>,
+  timeoutMs: number,
+): Promise<UnipileAccount | undefined> {
+  const started = Date.now();
+  while (Date.now() - started <= timeoutMs) {
+    const accounts = (await client.listAccounts()).filter((account) => account.type === "LINKEDIN");
+    const added = accounts.filter((account) => !before.has(account.id));
+    if (added.length === 1) return added[0];
+    if (added.length > 1) return newestAccount(added);
+    if (before.size === 0 && accounts.length === 1) return accounts[0];
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+  }
+  return undefined;
+}
+
+function newestAccount(accounts: UnipileAccount[]): UnipileAccount {
+  return accounts[accounts.length - 1];
+}
+
+async function resolveLinkedinAccountBySafeSelector(
+  client: UnipileClient,
+  selector: { handle?: string; name?: string },
+): Promise<UnipileAccount> {
+  const accounts = (await client.listAccounts()).filter((account) => account.type === "LINKEDIN");
+  if (!selector.handle && !selector.name) {
+    if (accounts.length === 1) return accounts[0];
+    throw new Error("Provide --handle or --name. Run `fcdx linkedin accounts` to see available handles.");
+  }
+  const normalizedHandle = selector.handle?.toLowerCase();
+  const normalizedName = selector.name?.toLowerCase();
+  const matches = accounts.filter((account) => {
+    const handle = linkedinAccountHandle(account)?.toLowerCase();
+    const name = account.name?.toLowerCase();
+    return (normalizedHandle && handle === normalizedHandle) || (normalizedName && name === normalizedName);
+  });
+  if (matches.length === 1) return matches[0];
+  if (matches.length === 0) throw new Error("No LinkedIn account matched that handle/name.");
+  throw new Error("Multiple LinkedIn accounts matched. Use a more specific --handle.");
+}
+
+function storeLinkedinAccountOnProfile(profileName: string, account: UnipileAccount): void {
+  setActiveProfile(profileName, {
+    name: profileName,
+    unipileLinkedinAccountId: account.id,
+    unipileLinkedinHandle: linkedinAccountHandle(account),
+    unipileLinkedinName: account.name,
+  });
+}
+
+function publicLinkedinAccount(account: UnipileAccount): Record<string, unknown> {
+  return {
+    handle: linkedinAccountHandle(account),
+    name: account.name,
+    label: linkedinAccountLabel(account),
+    status: account.sources?.map((source) => source.status).filter(Boolean).join(", ") || undefined,
+  };
+}
+
+function linkedinAccountHandle(account: UnipileAccount): string | undefined {
+  return account.connection_params?.im?.username || account.connection_params?.im?.publicIdentifier;
+}
+
+function linkedinAccountLabel(account: UnipileAccount): string {
+  return linkedinAccountHandle(account) || account.name || "(connected LinkedIn account)";
 }
 
 function normalizeProfile(profile: LinkedinSearchProfile): Record<string, unknown> {
@@ -1114,6 +1831,32 @@ function parseJsonOption(value: string | undefined): unknown {
 function splitOptionValues(values: string[] | undefined): string[] | undefined {
   const split = (values ?? []).flatMap((value) => value.split(",")).map((value) => value.trim()).filter(Boolean);
   return split.length ? split : undefined;
+}
+
+function maskConfig(config: FcdxConfig, options: { showSecrets: boolean }): FcdxConfig {
+  if (options.showSecrets) return config;
+  return {
+    ...config,
+    env: Object.fromEntries(Object.entries(config.env ?? {}).map(([key, value]) => [key, maskSecret(value)])),
+    profiles: Object.fromEntries(
+      Object.entries(config.profiles ?? {}).map(([name, profile]) => [name, maskProfile(profile)]),
+    ),
+  };
+}
+
+function maskProfile(profile: FcdxProfile): FcdxProfile {
+  return {
+    ...profile,
+    ...(profile.unipileLinkedinAccountId
+      ? { unipileLinkedinAccountId: maskSecret(profile.unipileLinkedinAccountId) }
+      : {}),
+  };
+}
+
+function maskSecret(value: string): string {
+  if (!value) return "";
+  if (value.length <= 8) return "****";
+  return `${value.slice(0, 4)}...${value.slice(-4)}`;
 }
 
 function summarizeMatchesByCategory(matches: ReturnType<typeof compareTargetCompanies>): Record<string, { total: number; matched: number }> {

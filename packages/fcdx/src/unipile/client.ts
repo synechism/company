@@ -121,8 +121,9 @@ export class UnipileClient {
       throw new Error("No LinkedIn account is connected. Run `fcdx linkedin auth` first.");
     }
 
-    const labels = linkedinAccounts.map((account) => `${account.id}${account.name ? ` (${account.name})` : ""}`);
-    throw new Error(`Multiple LinkedIn accounts are connected. Re-run with --account-id. Options: ${labels.join(", ")}`);
+    throw new Error(
+      "Multiple LinkedIn accounts are connected. Run `fcdx linkedin accounts` to inspect profiles, then `fcdx linkedin use-account --handle <handle>` to set the default for this local profile.",
+    );
   }
 
   async searchLinkedinProfiles(options: {
