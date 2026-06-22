@@ -5,7 +5,25 @@ company lists/tags in DuckDB, and running file-backed Firecrawl enrichment.
 
 ## Setup
 
+Prerequisites:
+
+- Node.js 20+
+- pnpm 10+
+- a local copy of the People Data Labs Free Company Dataset as CSV or Parquet
+
+If pnpm is not installed:
+
 ```bash
+corepack enable
+corepack prepare pnpm@10.24.0 --activate
+```
+
+Clone the repo, install dependencies, build the CLI, and install `fcdx` onto
+`PATH`:
+
+```bash
+git clone <repo-url>
+cd <repo>
 pnpm install
 pnpm install-fcdx
 ```
@@ -21,6 +39,14 @@ Installer paths:
 - data home: `~/.local/share/fcdx`
 - DuckDB: `~/.local/share/fcdx/fcdx.duckdb`
 - Firecrawl cache: `~/.local/share/fcdx/cache/firecrawl`
+
+Verify the binary is available:
+
+```bash
+fcdx --help
+```
+
+Then choose one data-source setup.
 
 CSV-backed setup:
 
@@ -45,6 +71,9 @@ fcdx config init \
 
 fcdx db init --replace
 ```
+
+This creates the `companies` table and the empty workspace/cache tables used by
+lists, tags, and Firecrawl cache metadata.
 
 You can also skip config for one-off imports:
 
