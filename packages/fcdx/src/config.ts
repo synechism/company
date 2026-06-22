@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 
 export const DEFAULT_DATASET_PATH =
-  process.env.PDL_COMPANY_CSV || "/home/abhi/data/free_company_dataset.csv";
+  process.env.PDL_COMPANY_CSV || path.join(os.homedir(), ".local", "share", "fcdx", "free_company_dataset.csv");
 
 export type FcdxConfig = {
   dbPath?: string;

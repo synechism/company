@@ -3,7 +3,7 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const packageRoot = path.join(root, "packages", "fcdx");
@@ -12,8 +12,8 @@ const dataDir = path.resolve(process.env.FCDX_DATA_HOME || path.join(process.env
 const configPath = path.resolve(process.env.FCDX_CONFIG || path.join(os.homedir(), ".config", "fcdx", "config.json"));
 const dbPath = path.resolve(process.env.FCDX_INSTALL_DB_PATH || path.join(dataDir, "fcdx.duckdb"));
 const firecrawlCacheDir = path.resolve(process.env.FCDX_INSTALL_FIRECRAWL_CACHE_DIR || path.join(dataDir, "cache", "firecrawl"));
-const replaceDb = process.env.FCDX_INSTALL_REPLACE_DB === "1";
-const copyParquet = process.env.FCDX_INSTALL_COPY_PARQUET === "1";
+const datasetPath = process.env.FCDX_INSTALL_DATASET_PATH ? path.resolve(process.env.FCDX_INSTALL_DATASET_PATH) : undefined;
+const parquetPath = process.env.FCDX_INSTALL_PARQUET_PATH ? path.resolve(process.env.FCDX_INSTALL_PARQUET_PATH) : undefined;
 
 if (!fs.existsSync(source)) {
   console.error(`Missing built CLI at ${source}. Run pnpm build first.`);
@@ -23,6 +23,7 @@ if (!fs.existsSync(source)) {
 const installDir = await chooseInstallDir();
 await fsp.mkdir(installDir, { recursive: true });
 await fsp.mkdir(dataDir, { recursive: true });
+await fsp.mkdir(firecrawlCacheDir, { recursive: true });
 
 const target = path.join(installDir, process.platform === "win32" ? "fcdx.cmd" : "fcdx");
 if (process.platform === "win32") {
@@ -34,14 +35,7 @@ if (process.platform === "win32") {
   await fsp.chmod(source, 0o755);
 }
 
-const bundledParquet = await resolveBundledParquet();
-const dbInstall = bundledParquet
-  ? await installDuckDbFromParquet(bundledParquet)
-  : {
-      installed: false,
-      reason: "No bundled Parquet found. Set FCDX_INSTALL_PARQUET or place data/free_company_dataset.parquet in the package.",
-    };
-const config = await writeConfig(bundledParquet ? dbInstall.parquetPath : undefined);
+const config = await writeConfig();
 
 console.log(
   JSON.stringify(
@@ -51,70 +45,26 @@ console.log(
       source,
       dataDir,
       configPath,
-      db: dbInstall,
       config,
+      nextSteps: [
+        "Put the PDL CSV or Parquet somewhere on this machine.",
+        `Run: fcdx config init --dataset /path/to/free_company_dataset.csv --db ${dbPath} --firecrawl-cache-dir ${firecrawlCacheDir} --force`,
+        `Or:  fcdx config init --parquet /path/to/free_company_dataset.parquet --db ${dbPath} --firecrawl-cache-dir ${firecrawlCacheDir} --force`,
+        "Then run: fcdx db init --replace",
+      ],
     },
     null,
     2,
   ),
 );
 
-async function resolveBundledParquet() {
-  const candidates = [
-    process.env.FCDX_INSTALL_PARQUET,
-    path.join(packageRoot, "data", "free_company_dataset.parquet"),
-    path.join(root, "data", "free_company_dataset.parquet"),
-  ].filter((value) => value && value.trim().length > 0);
-
-  for (const candidate of candidates) {
-    const resolved = path.resolve(candidate);
-    if (fs.existsSync(resolved)) return resolved;
-  }
-  return undefined;
-}
-
-async function installDuckDbFromParquet(sourceParquet) {
-  const parquetPath = copyParquet ? path.join(dataDir, "free_company_dataset.parquet") : path.resolve(sourceParquet);
-  if (copyParquet && path.resolve(sourceParquet) !== path.resolve(parquetPath)) {
-    await fsp.copyFile(sourceParquet, parquetPath);
-  }
-
-  if (fs.existsSync(dbPath) && !replaceDb) {
-    return {
-      installed: false,
-      skipped: true,
-      reason: "DuckDB already exists; set FCDX_INSTALL_REPLACE_DB=1 to rebuild it.",
-      dbPath,
-      parquetPath,
-    };
-  }
-
-  const { initializeFcdxDb } = await import(pathToFileURL(path.join(packageRoot, "dist", "db", "fcdx.js")).href);
-  const summary = await initializeFcdxDb({
-    dbPath,
-    sourcePath: parquetPath,
-    sourceType: "parquet",
-    replace: true,
-  });
-  return {
-    installed: true,
-    dbPath,
-    parquetPath,
-    summary,
-  };
-}
-
-async function writeConfig(parquetPath) {
+async function writeConfig() {
   const existing = await readExistingConfig();
   const next = { ...existing };
-  if (parquetPath) {
-    next.dbPath = dbPath;
-    next.parquetPath = parquetPath;
-    next.firecrawlCacheDir = firecrawlCacheDir;
-  } else {
-    next.dbPath ??= dbPath;
-    next.firecrawlCacheDir ??= firecrawlCacheDir;
-  }
+  next.dbPath ??= dbPath;
+  next.firecrawlCacheDir ??= firecrawlCacheDir;
+  if (datasetPath) next.datasetPath = datasetPath;
+  if (parquetPath) next.parquetPath = parquetPath;
   await fsp.mkdir(path.dirname(configPath), { recursive: true });
   await fsp.writeFile(configPath, `${JSON.stringify(next, null, 2)}\n`, "utf8");
   return next;

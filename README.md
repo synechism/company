@@ -12,8 +12,8 @@ pnpm install-fcdx
 
 `pnpm install-fcdx` builds the CLI, installs an `fcdx` executable into a
 writable directory on `PATH`, creates an FCD-X data home, and writes config.
-If a Parquet artifact is available, it also materializes the local DuckDB during
-install.
+It does not bundle or download the dataset; point the CLI at a CSV or Parquet
+that you have locally, then materialize DuckDB with `fcdx db init`.
 
 Installer paths:
 
@@ -21,46 +21,42 @@ Installer paths:
 - data home: `~/.local/share/fcdx`
 - DuckDB: `~/.local/share/fcdx/fcdx.duckdb`
 - Firecrawl cache: `~/.local/share/fcdx/cache/firecrawl`
-- bundled Parquet: kept at its package path by default
 
-To bundle data with the install, put the Parquet artifact at:
-
-```text
-packages/fcdx/data/free_company_dataset.parquet
-```
-
-or point the installer at an external artifact:
-
-```bash
-FCDX_INSTALL_PARQUET=/path/to/free_company_dataset.parquet pnpm install-fcdx
-```
-
-By default, the installer materializes DuckDB from the Parquet in place instead
-of copying the 2GB artifact into the data home. Set `FCDX_INSTALL_COPY_PARQUET=1`
-if you explicitly want a private Parquet copy under the FCD-X data home.
-
-To rebuild an existing installed DB:
-
-```bash
-FCDX_INSTALL_REPLACE_DB=1 FCDX_INSTALL_PARQUET=/path/to/free_company_dataset.parquet pnpm install-fcdx
-```
-
-To generate the shippable Parquet from an existing DuckDB:
-
-```bash
-fcdx db export-parquet --output /path/to/free_company_dataset.parquet
-```
-
-Configure local paths:
+CSV-backed setup:
 
 ```bash
 fcdx config init \
-  --db /home/abhi/data/fcdx.duckdb \
-  --dataset /home/abhi/data/free_company_dataset.csv \
-  --parquet /home/abhi/data/free_company_dataset.parquet \
-  --firecrawl-cache-dir output/cache/firecrawl
+  --db ~/.local/share/fcdx/fcdx.duckdb \
+  --dataset /path/to/free_company_dataset.csv \
+  --firecrawl-cache-dir ~/.local/share/fcdx/cache/firecrawl \
+  --force
 
-fcdx config show
+fcdx db init --replace
+```
+
+Parquet-backed setup:
+
+```bash
+fcdx config init \
+  --db ~/.local/share/fcdx/fcdx.duckdb \
+  --parquet /path/to/free_company_dataset.parquet \
+  --firecrawl-cache-dir ~/.local/share/fcdx/cache/firecrawl \
+  --force
+
+fcdx db init --replace
+```
+
+You can also skip config for one-off imports:
+
+```bash
+fcdx db init --csv /path/to/free_company_dataset.csv --replace
+fcdx db init --parquet /path/to/free_company_dataset.parquet --replace
+```
+
+To generate a Parquet from an existing local DuckDB:
+
+```bash
+fcdx db export-parquet --output /path/to/free_company_dataset.parquet
 ```
 
 The config file defaults to `~/.config/fcdx/config.json`. Set `FCDX_CONFIG` to
@@ -71,6 +67,7 @@ Common environment variables:
 - `FCDX_CONFIG`: config JSON path.
 - `FCDX_DB_PATH`: fallback DuckDB path if config does not set `dbPath`.
 - `PDL_COMPANY_CSV`: fallback CSV path if config does not set `datasetPath`.
+- `FCDX_PARQUET_PATH`: fallback Parquet path if config does not set `parquetPath`.
 - `FIRECRAWL_API_KEY`: required for `fcdx crawl` and `fcdx enrich file`.
 - `UNIPILE_BASE_URL`: Unipile tenant DSN/base URL.
 - `UNIPILE_ACCESS_TOKEN`: Unipile API key.
@@ -98,7 +95,7 @@ fcdx enrich --help
 
 ## Core Workflow
 
-Materialize the PDL CSV into DuckDB once:
+Materialize the PDL CSV or Parquet into DuckDB once:
 
 ```bash
 fcdx db init --replace
