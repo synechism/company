@@ -103,6 +103,38 @@ Common environment variables:
 
 Do not commit `.env` files.
 
+## External Service Credentials
+
+Filtering, lists, tags, and DuckDB setup are fully local. Crawling, enrichment,
+and LinkedIn lookup require API credentials.
+
+Create a local `.env` file:
+
+```bash
+cp .env.example .env
+```
+
+Then fill in the services you plan to use:
+
+```env
+# Required for fcdx crawl and fcdx enrich file
+FIRECRAWL_API_KEY=fc-...
+
+# Required for fcdx linkedin auth and fcdx linkedin list-profiles
+UNIPILE_BASE_URL=https://api51.unipile.com:18107
+UNIPILE_ACCESS_TOKEN=...
+```
+
+You can also pass credentials for a single command:
+
+```bash
+FIRECRAWL_API_KEY=fc-... fcdx crawl --company='SMTC'
+```
+
+The CLI loads `.env` automatically when run from the repo. If `fcdx` is run from
+another directory, either export the variables in your shell or run it from the
+repo root.
+
 ## Development
 
 The repo is a pnpm workspace. The CLI package lives in `packages/fcdx`.
