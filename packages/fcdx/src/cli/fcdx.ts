@@ -35,6 +35,7 @@ import {
   addCompaniesFromJsonlToList,
   addCompanyQueryToList,
   addTagToCompany,
+  AmbiguousCompanyMatchError,
   createList,
   createTag,
   defineListField,
@@ -45,6 +46,7 @@ import {
   listStats,
   listTags,
   migrateWorkspace,
+  NoCompanyMatchError,
   removeCompanyFromList,
   removeTagFromCompany,
   resolveCompanyId,
@@ -88,8 +90,8 @@ Examples:
   fcdx config init --parquet /data/free_company_dataset.parquet --force
   fcdx db init --replace
   fcdx filterby --industry "construction" --limit 25
-  fcdx list create thermal-cooling
-  fcdx crawl --company "SMTC"
+  fcdx list create --list thermal-cooling
+  fcdx crawl --company-id pdl_company_id_here
 
 Run "fcdx <command> --help" for command-specific examples and options.
 `,
@@ -287,7 +289,7 @@ const profile = program
     `
 Examples:
   fcdx profile show
-  fcdx profile use tom
+  fcdx profile use --profile tom
   fcdx linkedin auth --profile tom
 
 Subcommand options:
@@ -325,18 +327,20 @@ Examples:
   });
 
 profile
-  .command("use <name>")
+  .command("use [name]")
   .description("Switch the active local profile, creating it if needed")
+  .option("--profile <name>", "Profile name")
   .addHelpText(
     "after",
     `
 Examples:
-  fcdx profile use default
-  fcdx profile use tom
+  fcdx profile use --profile default
+  fcdx profile use --profile tom
 `,
   )
-  .action((name) => {
-    const next = setActiveProfile(name, { name });
+  .action((name, options) => {
+    const profileName = resolveNamedArg("profile", name, options.profile);
+    const next = setActiveProfile(profileName, { name: profileName });
     console.log(JSON.stringify({ currentProfile: activeProfileName(next), profile: maskProfile(activeProfile(next)) }, null, 2));
   });
 
@@ -527,7 +531,8 @@ Examples:
 program
   .command("crawl")
   .description("Enrich one company with Firecrawl, using the local filesystem cache")
-  .requiredOption("--company <name>", "Company name or website substring")
+  .option("--company <name>", "Company name, website, or LinkedIn substring; must resolve to exactly one DB row")
+  .option("--company-id <id>", "Exact PDL company id; preferred when the name is ambiguous")
   .option("--db <path>", "DuckDB path", resolveDbPath())
   .option("--country <country>", "Country filter; pass '*' to search globally", "united states")
   .option("--cache-dir <path>", "Filesystem cache root", resolveFirecrawlCacheDir())
@@ -539,8 +544,11 @@ program
     `
 Examples:
   fcdx crawl --company "SMTC"
-  fcdx crawl --company "SMTC" --country "*" --output output/enriched/smtc.jsonl
-  fcdx crawl --company "SMTC" --force-refresh
+  fcdx crawl --company-id pdl_company_id_here --output output/enriched/smtc.jsonl
+  fcdx crawl --company-id pdl_company_id_here --force-refresh
+
+If --company matches multiple rows, retry with the company id printed in the
+ambiguity response.
 `,
   )
   .action(async (options) => {
@@ -549,8 +557,11 @@ Examples:
     const { instance, connection } = await connectFcdxDb(options.db);
     try {
       const country = options.country === "*" ? undefined : options.country;
-      const [company] = await queryCompanies(connection, { company: options.company, country, limit: 1 });
-      if (!company) throw new Error(`No company matched ${options.company}. Try: fcdx filterby --company "${options.company}"`);
+      const company = await resolveCompanyId(connection, {
+        companyId: options.companyId,
+        company: options.company,
+        country,
+      });
       const result = await enrichCompanyWithFirecrawl(company, {
         apiKey: firecrawlApiKey,
         outputDir: path.dirname(options.output),
@@ -649,16 +660,19 @@ const list = program
     "after",
     `
 Examples:
-  fcdx list create targets --description "Priority companies"
-  fcdx list add targets --company "SMTC"
-  fcdx list add targets --from-jsonl output/candidates/db-strict.jsonl --limit 100
-  fcdx list set-field targets --field ceo_name --type person
-  fcdx list set-field targets --company "SMTC" --field ceo_name --value "Jane Doe"
-  fcdx list show targets --limit 25
+  fcdx list create --list targets --description "Priority companies"
+  fcdx list add --list targets --company "SMTC"
+  fcdx list add --list targets --company-id pdl_company_id_here
+  fcdx list add --list targets --from-jsonl output/candidates/db-strict.jsonl --limit 100
+  fcdx list set-field --list targets --field ceo_name --type person
+  fcdx list set-field --list targets --company-id pdl_company_id_here --field ceo_name --value "Jane Doe"
+  fcdx list delete-entry --list targets --company-id pdl_company_id_here
+  fcdx list show --list targets --limit 25
 
 Subcommand options:
   fcdx list create --help
   fcdx list add --help
+  fcdx list delete-entry --help
   fcdx list set-field --help
   fcdx list show --help
   fcdx list delete --help
@@ -666,8 +680,9 @@ Subcommand options:
   );
 
 list
-  .command("create <name>")
+  .command("create [name]")
   .description("Create a durable list without modifying the source companies table")
+  .option("--list <name>", "List name")
   .option("--db <path>", "DuckDB path", resolveDbPath())
   .option("--description <text>", "List description")
   .option("--metadata-json <json>", "Optional JSON metadata for the list")
@@ -675,16 +690,17 @@ list
     "after",
     `
 Examples:
-  fcdx list create targets
-  fcdx list create thermal-cooling --description "Cooling and thermal companies"
-  fcdx list create targets --metadata-json '{"owner":"sales","priority":"high"}'
+  fcdx list create --list targets
+  fcdx list create --list thermal-cooling --description "Cooling and thermal companies"
+  fcdx list create --list targets --metadata-json '{"owner":"sales","priority":"high"}'
 `,
   )
   .action(async (name, options) => {
     const { instance, connection } = await connectFcdxDb(options.db);
     try {
+      const listName = resolveListName(name, options.list);
       const created = await createList(connection, {
-        name,
+        name: listName,
         description: options.description,
         metadata: parseJsonOption(options.metadataJson),
       });
@@ -722,22 +738,23 @@ Example:
   });
 
 list
-  .command("delete <name>")
+  .command("delete [name]")
   .description("Delete a list and its list-specific fields; does not delete companies")
+  .option("--list <name>", "List name")
   .option("--db <path>", "DuckDB path", resolveDbPath())
   .option("--yes", "Confirm deletion", false)
   .addHelpText(
     "after",
     `
 Example:
-  fcdx list delete targets --yes
+  fcdx list delete --list targets --yes
 `,
   )
   .action(async (name, options) => {
     if (!options.yes) throw new Error("Refusing to delete without --yes");
     const { instance, connection } = await connectFcdxDb(options.db);
     try {
-      console.log(JSON.stringify({ deleted: await deleteList(connection, name) }, null, 2));
+      console.log(JSON.stringify({ deleted: await deleteList(connection, resolveListName(name, options.list)) }, null, 2));
     } catch (error) {
       exitWithError(error);
     } finally {
@@ -747,33 +764,37 @@ Example:
   });
 
 list
-  .command("add <name>")
-  .description("Add companies to a list by company query, company id, or candidate JSONL")
+  .command("add [name]")
+  .description("Add companies to a list by unambiguous company name, company id, or candidate JSONL")
+  .option("--list <name>", "List name")
   .option("--db <path>", "DuckDB path", resolveDbPath())
-  .option("--company <name>", "Company name, website, or LinkedIn substring to add")
-  .option("--company-id <id>", "Exact company id to add")
+  .option("--company <name>", "Company name, website, or LinkedIn substring; must resolve to exactly one DB row")
+  .option("--company-id <id>", "Exact PDL company id to add; preferred when the name is ambiguous")
   .option("--from-jsonl <path>", "Candidate JSONL file to add")
   .option("--country <country>", "Country filter for --company; pass '*' to search globally", "united states")
-  .option("--limit <n>", "Max companies to add for --company or --from-jsonl", parseIntArg)
+  .option("--limit <n>", "Max companies to add from --from-jsonl", parseIntArg)
   .option("--source <source>", "Source/provenance label for membership")
   .option("--reason <reason>", "Reason this company/list batch was added")
   .addHelpText(
     "after",
     `
 Examples:
-  fcdx list add targets --company "SMTC"
-  fcdx list add targets --company "SMTC" --country "*"
-  fcdx list add targets --company-id pdl_company_id_here
-  fcdx list add targets --from-jsonl output/candidates/db-strict.jsonl --limit 100 --source filterby
+  fcdx list add --list targets --company "SMTC"
+  fcdx list add --list targets --company-id pdl_company_id_here
+  fcdx list add --list targets --from-jsonl output/candidates/db-strict.jsonl --limit 100 --source filterby
+
+If --company matches multiple rows, FCD-X prints the candidate rows and exits.
+Retry the same command with --company-id using the intended id.
 `,
   )
   .action(async (name, options) => {
     const { instance, connection } = await connectFcdxDb(options.db);
     try {
+      const listName = resolveListName(name, options.list);
       const country = options.country === "*" ? undefined : options.country;
       if (options.fromJsonl) {
         const result = await addCompaniesFromJsonlToList(connection, {
-          listName: name,
+          listName,
           pathname: options.fromJsonl,
           source: options.source,
           reason: options.reason,
@@ -785,7 +806,7 @@ Examples:
       if (options.companyId) {
         const company = await resolveCompanyId(connection, { companyId: options.companyId });
         const result = await addCompaniesToList(connection, {
-          listName: name,
+          listName,
           companies: [company],
           source: options.source ?? "company-id",
           reason: options.reason ?? options.companyId,
@@ -795,12 +816,11 @@ Examples:
       }
       if (options.company) {
         const result = await addCompanyQueryToList(connection, {
-          listName: name,
+          listName,
           company: options.company,
           country,
           source: options.source,
           reason: options.reason,
-          limit: options.limit ?? 1,
         });
         console.log(JSON.stringify(result, null, 2));
         return;
@@ -815,30 +835,33 @@ Examples:
   });
 
 list
-  .command("remove <name>")
+  .command("remove [name]")
   .description("Remove a company from a list without deleting the source company")
+  .option("--list <name>", "List name")
   .option("--db <path>", "DuckDB path", resolveDbPath())
-  .option("--company <name>", "Company name, website, or LinkedIn substring")
-  .option("--company-id <id>", "Exact company id")
+  .option("--company <name>", "Company name, website, or LinkedIn substring; must resolve to exactly one DB row")
+  .option("--company-id <id>", "Exact PDL company id")
   .option("--country <country>", "Country filter for --company; pass '*' to search globally", "united states")
   .addHelpText(
     "after",
     `
 Examples:
-  fcdx list remove targets --company "SMTC"
-  fcdx list remove targets --company-id pdl_company_id_here
+  fcdx list remove --list targets --company "SMTC"
+  fcdx list remove --list targets --company-id pdl_company_id_here
+  fcdx list delete-entry --list targets --company-id pdl_company_id_here
 `,
   )
   .action(async (name, options) => {
     const { instance, connection } = await connectFcdxDb(options.db);
     try {
+      const listName = resolveListName(name, options.list);
       const country = options.country === "*" ? undefined : options.country;
       const company = await resolveCompanyId(connection, {
         companyId: options.companyId,
         company: options.company,
         country,
       });
-      console.log(JSON.stringify(await removeCompanyFromList(connection, { listName: name, companyId: company.id }), null, 2));
+      console.log(JSON.stringify(await removeCompanyFromList(connection, { listName, companyId: company.id }), null, 2));
     } catch (error) {
       exitWithError(error);
     } finally {
@@ -848,22 +871,52 @@ Examples:
   });
 
 list
-  .command("show <name>")
+  .command("delete-entry [name]")
+  .description("Delete one list entry by exact company id; does not delete the source company")
+  .option("--list <name>", "List name")
+  .requiredOption("--company-id <id>", "Exact PDL company id to remove from this list")
+  .option("--db <path>", "DuckDB path", resolveDbPath())
+  .addHelpText(
+    "after",
+    `
+Example:
+  fcdx list delete-entry --list targets --company-id pdl_company_id_here
+
+Use this when --company is ambiguous. It removes list membership and any
+list-local field values for that company/list pair only.
+`,
+  )
+  .action(async (name, options) => {
+    const { instance, connection } = await connectFcdxDb(options.db);
+    try {
+      const listName = resolveListName(name, options.list);
+      console.log(JSON.stringify(await removeCompanyFromList(connection, { listName, companyId: options.companyId }), null, 2));
+    } catch (error) {
+      exitWithError(error);
+    } finally {
+      connection.closeSync();
+      instance.closeSync();
+    }
+  });
+
+list
+  .command("show [name]")
   .description("Show list members with list-specific fields and global tags")
+  .option("--list <name>", "List name")
   .option("--db <path>", "DuckDB path", resolveDbPath())
   .option("--limit <n>", "Maximum rows to show", parseIntArg, 50)
   .addHelpText(
     "after",
     `
 Examples:
-  fcdx list show targets
-  fcdx list show targets --limit 25
+  fcdx list show --list targets
+  fcdx list show --list targets --limit 25
 `,
   )
   .action(async (name, options) => {
     const { instance, connection } = await connectFcdxDb(options.db);
     try {
-      console.log(JSON.stringify(await showList(connection, { listName: name, limit: options.limit }), null, 2));
+      console.log(JSON.stringify(await showList(connection, { listName: resolveListName(name, options.list), limit: options.limit }), null, 2));
     } catch (error) {
       exitWithError(error);
     } finally {
@@ -873,20 +926,21 @@ Examples:
   });
 
 list
-  .command("stats <name>")
+  .command("stats [name]")
   .description("Summarize list membership by industry, size, tags, and list-specific fields")
+  .option("--list <name>", "List name")
   .option("--db <path>", "DuckDB path", resolveDbPath())
   .addHelpText(
     "after",
     `
 Example:
-  fcdx list stats targets
+  fcdx list stats --list targets
 `,
   )
   .action(async (name, options) => {
     const { instance, connection } = await connectFcdxDb(options.db);
     try {
-      console.log(JSON.stringify(await listStats(connection, name), null, 2));
+      console.log(JSON.stringify(await listStats(connection, resolveListName(name, options.list)), null, 2));
     } catch (error) {
       exitWithError(error);
     } finally {
@@ -896,13 +950,14 @@ Example:
   });
 
 list
-  .command("set-field <name>")
+  .command("set-field [name]")
   .description("Define a list-specific field, or set that field for one company")
+  .option("--list <name>", "List name")
   .requiredOption("--field <key>", "List field key")
   .option("--value <value>", "Field value; use --json-value for structured JSON")
   .option("--db <path>", "DuckDB path", resolveDbPath())
-  .option("--company <name>", "Company name, website, or LinkedIn substring")
-  .option("--company-id <id>", "Exact company id")
+  .option("--company <name>", "Company name, website, or LinkedIn substring; must resolve to exactly one DB row")
+  .option("--company-id <id>", "Exact PDL company id; preferred when the name is ambiguous")
   .option("--country <country>", "Country filter for --company; pass '*' to search globally", "united states")
   .option("--type <type>", "Field type, e.g. string, url, person, number, boolean")
   .option("--description <text>", "Field description")
@@ -914,19 +969,24 @@ list
     `
 Examples:
   # Define a field for this list only; no companies get a value yet.
-  fcdx list set-field targets --field ceo_name --type person --description "CEO name"
+  fcdx list set-field --list targets --field ceo_name --type person --description "CEO name"
 
   # Set the field for one company in this list.
-  fcdx list set-field targets --company "SMTC" --field ceo_name --value "John Stone" --source linkedin
+  fcdx list set-field --list targets --company "SMTC" --field ceo_name --value "John Stone" --source linkedin
+  fcdx list set-field --list targets --company-id pdl_company_id_here --field ceo_name --value "John Stone"
 
   # Store a structured value.
-  fcdx list set-field targets --company "SMTC" --field ceo --json-value \\
+  fcdx list set-field --list targets --company-id pdl_company_id_here --field ceo --json-value \\
     --value '{"name":"John Stone","linkedin_url":"https://www.linkedin.com/in/..."}'
+
+If --company matches multiple rows, retry with --company-id from the printed
+ambiguity response.
 `,
   )
   .action(async (name, options) => {
     const { instance, connection } = await connectFcdxDb(options.db);
     try {
+      const listName = resolveListName(name, options.list);
       if (!options.value && (options.company || options.companyId)) {
         throw new Error("Provide --value when setting a field for a company. Omit --company/--company-id to define the field only.");
       }
@@ -934,7 +994,7 @@ Examples:
         console.log(
           JSON.stringify(
             await defineListField(connection, {
-              listName: name,
+              listName,
               fieldKey: options.field,
               fieldType: options.type,
               description: options.description,
@@ -954,7 +1014,7 @@ Examples:
       console.log(
         JSON.stringify(
           await setListFieldValue(connection, {
-            listName: name,
+            listName,
             companyId: company.id,
             fieldKey: options.field,
             value: options.jsonValue ? parseJsonOption(options.value) : options.value,
@@ -976,20 +1036,21 @@ Examples:
   });
 
 list
-  .command("fields <name>")
+  .command("fields [name]")
   .description("List field definitions and value counts for a list")
+  .option("--list <name>", "List name")
   .option("--db <path>", "DuckDB path", resolveDbPath())
   .addHelpText(
     "after",
     `
 Example:
-  fcdx list fields targets
+  fcdx list fields --list targets
 `,
   )
   .action(async (name, options) => {
     const { instance, connection } = await connectFcdxDb(options.db);
     try {
-      console.log(JSON.stringify(await listFields(connection, name), null, 2));
+      console.log(JSON.stringify(await listFields(connection, resolveListName(name, options.list)), null, 2));
     } catch (error) {
       exitWithError(error);
     } finally {
@@ -1005,8 +1066,9 @@ const tag = program
     "after",
     `
 Examples:
-  fcdx tag create buyer:contract_manufacturer --description "Contract manufacturing target"
+  fcdx tag create --tag buyer:contract_manufacturer --description "Contract manufacturing target"
   fcdx tag add --company "SMTC" --tag buyer:contract_manufacturer --confidence 0.9
+  fcdx tag add --company-id pdl_company_id_here --tag priority:high
   fcdx tag list --company "SMTC"
   fcdx tag stats
 
@@ -1019,8 +1081,9 @@ Subcommand options:
   );
 
 tag
-  .command("create <name>")
+  .command("create [name]")
   .description("Create a tag definition")
+  .option("--tag <name>", "Tag name")
   .option("--db <path>", "DuckDB path", resolveDbPath())
   .option("--description <text>", "Tag description")
   .option("--metadata-json <json>", "Optional JSON metadata for the tag")
@@ -1028,17 +1091,18 @@ tag
     "after",
     `
 Examples:
-  fcdx tag create buyer:contract_manufacturer
-  fcdx tag create category:thermal_cooling --description "Thermal/cooling company"
-  fcdx tag create priority:high --metadata-json '{"owner":"sales"}'
+  fcdx tag create --tag buyer:contract_manufacturer
+  fcdx tag create --tag category:thermal_cooling --description "Thermal/cooling company"
+  fcdx tag create --tag priority:high --metadata-json '{"owner":"sales"}'
 `,
   )
   .action(async (name, options) => {
     const { instance, connection } = await connectFcdxDb(options.db);
     try {
+      const tagName = resolveNamedArg("tag", name, options.tag);
       console.log(
         JSON.stringify(
-          { tag: await createTag(connection, { name, description: options.description, metadata: parseJsonOption(options.metadataJson) }) },
+          { tag: await createTag(connection, { name: tagName, description: options.description, metadata: parseJsonOption(options.metadataJson) }) },
           null,
           2,
         ),
@@ -1056,8 +1120,8 @@ tag
   .description("Add a tag to one company")
   .requiredOption("--tag <name>", "Tag name")
   .option("--db <path>", "DuckDB path", resolveDbPath())
-  .option("--company <name>", "Company name, website, or LinkedIn substring")
-  .option("--company-id <id>", "Exact company id")
+  .option("--company <name>", "Company name, website, or LinkedIn substring; must resolve to exactly one DB row")
+  .option("--company-id <id>", "Exact PDL company id; preferred when the name is ambiguous")
   .option("--country <country>", "Country filter for --company; pass '*' to search globally", "united states")
   .option("--value <value>", "Optional tag value")
   .option("--source <source>", "Source/provenance label")
@@ -1070,6 +1134,9 @@ Examples:
   fcdx tag add --company "SMTC" --tag buyer:contract_manufacturer
   fcdx tag add --company "SMTC" --tag category:thermal_cooling --confidence 0.8 --source agent
   fcdx tag add --company-id pdl_company_id_here --tag priority:high --reason "Strong procurement fit"
+
+If --company matches multiple rows, FCD-X prints the candidate rows and exits.
+Retry with --company-id using the intended id.
 `,
   )
   .action(async (options) => {
@@ -1108,8 +1175,8 @@ tag
   .description("Remove a tag from one company")
   .requiredOption("--tag <name>", "Tag name")
   .option("--db <path>", "DuckDB path", resolveDbPath())
-  .option("--company <name>", "Company name, website, or LinkedIn substring")
-  .option("--company-id <id>", "Exact company id")
+  .option("--company <name>", "Company name, website, or LinkedIn substring; must resolve to exactly one DB row")
+  .option("--company-id <id>", "Exact PDL company id")
   .option("--country <country>", "Country filter for --company; pass '*' to search globally", "united states")
   .addHelpText(
     "after",
@@ -1141,8 +1208,8 @@ tag
   .command("list")
   .description("List all tags, or tags for one company")
   .option("--db <path>", "DuckDB path", resolveDbPath())
-  .option("--company <name>", "Company name, website, or LinkedIn substring")
-  .option("--company-id <id>", "Exact company id")
+  .option("--company <name>", "Company name, website, or LinkedIn substring; must resolve to exactly one DB row")
+  .option("--company-id <id>", "Exact PDL company id")
   .option("--country <country>", "Country filter for --company; pass '*' to search globally", "united states")
   .addHelpText(
     "after",
@@ -1151,6 +1218,8 @@ Examples:
   fcdx tag list
   fcdx tag list --company "SMTC"
   fcdx tag list --company-id pdl_company_id_here
+
+If --company is ambiguous, use --company-id from the printed match list.
 `,
   )
   .action(async (options) => {
@@ -1833,6 +1902,19 @@ function splitOptionValues(values: string[] | undefined): string[] | undefined {
   return split.length ? split : undefined;
 }
 
+function resolveListName(positionalName?: string, optionName?: string): string {
+  return resolveNamedArg("list", positionalName, optionName);
+}
+
+function resolveNamedArg(label: string, positionalName?: string, optionName?: string): string {
+  if (positionalName && optionName && positionalName !== optionName) {
+    throw new Error(`${label} was provided twice with different values: ${positionalName} and ${optionName}`);
+  }
+  const name = optionName ?? positionalName;
+  if (!name) throw new Error(`Provide --${label} <name>`);
+  return name;
+}
+
 function maskConfig(config: FcdxConfig, options: { showSecrets: boolean }): FcdxConfig {
   if (options.showSecrets) return config;
   return {
@@ -1889,6 +1971,35 @@ function exitWithError(error: unknown): never {
     ) {
       console.error("Hint: verify UNIPILE_BASE_URL is the tenant DSN from the Unipile dashboard and that the API workspace is active.");
     }
+  } else if (error instanceof AmbiguousCompanyMatchError) {
+    console.error(error.message);
+    console.error(
+      JSON.stringify(
+        {
+          company: error.company,
+          country: error.country ?? "*",
+          hint: "Multiple DB rows matched. Showing up to maxShown rows. Retry the original command with --company-id set to the intended id.",
+          shown: error.matches.length,
+          maxShown: error.limit,
+          matches: error.matches,
+        },
+        null,
+        2,
+      ),
+    );
+  } else if (error instanceof NoCompanyMatchError) {
+    console.error(error.message);
+    console.error(
+      JSON.stringify(
+        {
+          company: error.company,
+          country: error.country ?? "*",
+          hint: "Try a narrower/wider name with fcdx filterby --company, or use --country \"*\" if the row is outside the default country.",
+        },
+        null,
+        2,
+      ),
+    );
   } else {
     console.error(error instanceof Error ? error.message : String(error));
   }

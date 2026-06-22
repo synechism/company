@@ -6,6 +6,7 @@ import { ensureWorkspaceSchema, queryCompanies } from "./fcdx.js";
 
 type DbParam = string | number | boolean | null;
 type DbParams = Record<string, DbParam>;
+const COMPANY_RESOLUTION_MATCH_LIMIT = 25;
 
 export type CompanyList = {
   id: string;
@@ -25,6 +26,28 @@ export type ListMember = {
   fields: Record<string, unknown>;
   tags: Array<{ name: string; value?: string; confidence?: number; source?: string; reason?: string }>;
 };
+
+export class NoCompanyMatchError extends Error {
+  constructor(
+    public readonly company: string,
+    public readonly country?: string,
+  ) {
+    super(`No company matched ${company}`);
+    this.name = "NoCompanyMatchError";
+  }
+}
+
+export class AmbiguousCompanyMatchError extends Error {
+  constructor(
+    public readonly company: string,
+    public readonly matches: CandidateCompany[],
+    public readonly country?: string,
+    public readonly limit = COMPANY_RESOLUTION_MATCH_LIMIT,
+  ) {
+    super(`Company name is ambiguous: ${company}`);
+    this.name = "AmbiguousCompanyMatchError";
+  }
+}
 
 export async function migrateWorkspace(connection: DuckDBConnection): Promise<void> {
   await ensureWorkspaceSchema(connection);
@@ -151,20 +174,19 @@ export async function addCompaniesFromJsonlToList(
 
 export async function addCompanyQueryToList(
   connection: DuckDBConnection,
-  input: { listName: string; company: string; country?: string; source?: string; reason?: string; limit?: number },
+  input: { listName: string; company: string; country?: string; source?: string; reason?: string },
 ): Promise<{ list: CompanyList; added: number; existing: number; matches: CandidateCompany[] }> {
-  const matches = await queryCompanies(connection, {
+  const company = await resolveCompanyId(connection, {
     company: input.company,
     country: input.country,
-    limit: input.limit ?? 1,
   });
   const result = await addCompaniesToList(connection, {
     listName: input.listName,
-    companies: matches,
+    companies: [company],
     source: input.source ?? "company-query",
     reason: input.reason ?? input.company,
   });
-  return { ...result, matches };
+  return { ...result, matches: [company] };
 }
 
 export async function removeCompanyFromList(
@@ -517,13 +539,16 @@ export async function resolveCompanyId(
     return rowToCandidate(rows[0]);
   }
   if (!input.company) throw new Error("Either --company or --company-id is required");
-  const [company] = await queryCompanies(connection, {
+  const matches = await queryCompanies(connection, {
     company: input.company,
     country: input.country,
-    limit: 1,
+    limit: COMPANY_RESOLUTION_MATCH_LIMIT,
   });
-  if (!company) throw new Error(`No company matched ${input.company}`);
-  return company;
+  if (matches.length === 0) throw new NoCompanyMatchError(input.company, input.country);
+  if (matches.length > 1) {
+    throw new AmbiguousCompanyMatchError(input.company, matches, input.country, COMPANY_RESOLUTION_MATCH_LIMIT);
+  }
+  return matches[0];
 }
 
 async function getListOrThrow(connection: DuckDBConnection, name: string): Promise<CompanyList> {

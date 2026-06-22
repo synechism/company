@@ -198,10 +198,11 @@ FCD-X examples use a consistent flag style:
 Examples:
 
 ```bash
-fcdx list add targets --company SMTC
+fcdx list add --list targets --company SMTC
+fcdx list add --list targets --company-id pdl_company_id_here
 fcdx linkedin list-profiles --company "cronwell ai" --p CEO --n 5
 fcdx filterby --industry "construction,electrical/electronic manufacturing"
-fcdx list remove targets --company SMTC --country "*"
+fcdx list delete-entry --list targets --company-id pdl_company_id_here
 ```
 
 ## Core Workflow
@@ -253,6 +254,7 @@ Single-company crawl/enrichment:
 
 ```bash
 FIRECRAWL_API_KEY=... fcdx crawl --company SMTC
+FIRECRAWL_API_KEY=... fcdx crawl --company-id pdl_company_id_here
 ```
 
 Batch file-backed enrichment:
@@ -281,6 +283,25 @@ confidence, reasons, and evidence for:
 Full enrichment outputs are intentionally file-backed. DuckDB stores company
 data, Firecrawl cache metadata, lists, list-local fields, tags, and tag mappings.
 
+## Company Resolution
+
+Commands that mutate or inspect one DB company, such as `crawl`, `list add`,
+`list set-field`, and `tag add`, accept either `--company` or `--company-id`.
+`--company` is intentionally strict: it succeeds only when the search resolves
+to exactly one company row. If multiple rows match, FCD-X prints the matched
+company rows, including ids, websites, industry, size, region, locality, and
+LinkedIn URL, then exits without making changes.
+
+When that happens, rerun the original command with the intended id:
+
+```bash
+fcdx list add --list targets --company "SMTC"
+fcdx list add --list targets --company-id pdl_company_id_here
+```
+
+Use `fcdx filterby --company "SMTC"` when you want an exploratory search that
+can return many rows.
+
 ## Lists
 
 Lists are durable named collections backed by separate DuckDB tables. They do
@@ -288,25 +309,28 @@ not modify the source `companies` table. List-specific columns, such as a CEO
 found by LinkedIn, are stored as flexible fields on that list.
 
 ```bash
-fcdx list create thermal-cooling --description "Cooling and thermal targets"
-fcdx list add thermal-cooling --company SMTC
-fcdx list add thermal-cooling --from-jsonl output/candidates/db-strict.jsonl --limit 100
-fcdx list set-field thermal-cooling --company SMTC --field ceo_name --value "Jane Doe" --type person
-fcdx list show thermal-cooling --limit 25
-fcdx list stats thermal-cooling
+fcdx list create --list thermal-cooling --description "Cooling and thermal targets"
+fcdx list add --list thermal-cooling --company SMTC
+fcdx list add --list thermal-cooling --company-id pdl_company_id_here
+fcdx list add --list thermal-cooling --from-jsonl output/candidates/db-strict.jsonl --limit 100
+fcdx list set-field --list thermal-cooling --company-id pdl_company_id_here --field ceo_name --value "Jane Doe" --type person
+fcdx list show --list thermal-cooling --limit 25
+fcdx list stats --list thermal-cooling
+fcdx list delete-entry --list thermal-cooling --company-id pdl_company_id_here
 ```
 
 Useful commands:
 
 - `list create <name>`: create a named list.
 - `list ls`: show all lists.
-- `list add <name>`: add by `--company`, `--company-id`, or `--from-jsonl`.
-- `list remove <name>`: remove one company from a list.
-- `list show <name>`: show members with list-specific fields and global tags.
-- `list stats <name>`: summarize industry, size, fields, and tags.
-- `list set-field <name>`: set a list-local field value for a company.
-- `list fields <name>`: show list-local field definitions and value counts.
-- `list delete <name> --yes`: delete list state only, never source company rows.
+- `list add --list <name>`: add by unambiguous `--company`, exact `--company-id`, or `--from-jsonl`.
+- `list remove --list <name>`: remove one company from a list by unambiguous name or exact id.
+- `list delete-entry --list <name> --company-id <id>`: remove a specific list entry by id.
+- `list show --list <name>`: show members with list-specific fields and global tags.
+- `list stats --list <name>`: summarize industry, size, fields, and tags.
+- `list set-field --list <name>`: define a list-local field or set a field value for one company.
+- `list fields --list <name>`: show list-local field definitions and value counts.
+- `list delete --list <name> --yes`: delete list state only, never source company rows.
 
 ## Tags
 
@@ -315,8 +339,9 @@ company-to-tag mapping table. They accumulate over time as the agent inspects
 companies.
 
 ```bash
-fcdx tag create buyer:contract_manufacturer --description "Contract manufacturing buyer profile"
+fcdx tag create --tag buyer:contract_manufacturer --description "Contract manufacturing buyer profile"
 fcdx tag add --company SMTC --tag buyer:contract_manufacturer --confidence 0.9 --reason "EMS target"
+fcdx tag add --company-id pdl_company_id_here --tag buyer:contract_manufacturer
 fcdx tag list --company SMTC
 fcdx tag stats
 ```
