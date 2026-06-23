@@ -5,6 +5,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { Command } from "commander";
 import type { DuckDBConnection } from "@duckdb/node-api";
+import pLimit from "p-limit";
 import {
   activeProfile,
   activeProfileName,
@@ -23,6 +24,7 @@ import {
 } from "../config.js";
 import { appendJsonl } from "../crawl/artifacts.js";
 import type { CandidateCompany } from "../types.js";
+import type { EnrichedCompany } from "../types.js";
 import {
   connectFcdxDb,
   exportCompaniesParquet,
@@ -56,6 +58,7 @@ import {
 } from "../db/workspace.js";
 import { runBatchEnrichment } from "../enrich/batch.js";
 import { enrichCompanyWithFirecrawl, firecrawlCompanyCacheDir } from "../enrich/firecrawl.js";
+import { HunterApiError, HunterClient, linkedinHandleFromUrl, type HunterEmailFinderData, type HunterEmailVerifierData } from "../hunter/client.js";
 import {
   buildAgentJudgedShortlist,
   buildTargetShortlist,
@@ -597,7 +600,9 @@ enrich.addHelpText(
   `
 Examples:
   fcdx enrich file --input output/candidates/targets.jsonl --output output/enriched/targets.jsonl
+  fcdx enrich list --list water-infra --question "Does this company manufacture water valves?"
   fcdx enrich file --help
+  fcdx enrich list --help
 `,
 );
 
@@ -655,6 +660,131 @@ Examples:
       console.log(JSON.stringify(summary, null, 2));
     } catch (error) {
       exitWithError(error);
+    }
+  });
+
+enrich
+  .command("list")
+  .description("Enrich every company in a durable list and write the result into list-local fields")
+  .requiredOption("--list <name>", "List name")
+  .requiredOption("--question <text>", "Experiment-specific yes/no question to answer for every company")
+  .option("--field <key>", "List field key that stores the full enrichment object", "enrichment")
+  .option("--db <path>", "DuckDB path", resolveDbPath())
+  .option("--limit <n>", "Maximum list members to enrich", parseIntArg)
+  .option("--concurrency <n>", "Parallel crawl/enrichment requests", parseIntArg, Number(process.env.CRAWL_CONCURRENCY ?? 2))
+  .option("--timeout-ms <n>", "Per-company crawl/enrichment timeout", parseIntArg, 120_000)
+  .option("--cache-dir <path>", "Firecrawl filesystem cache root", resolveFirecrawlCacheDir())
+  .option("--force-refresh", "Bypass cached raw page payloads and crawl fresh pages", false)
+  .option("--progress-every <n>", "Log progress every N completed companies", parseIntArg, 25)
+  .option("--jsonl-output <path>", "Optional debug JSONL copy of enriched rows")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx enrich list --list water-infra --question "Does this company manufacture water valves?"
+  fcdx enrich list --list thermal --field thermal_enrichment --question "Does this company manufacture thermal or cooling equipment?"
+  fcdx list show --list water-infra --limit 10
+
+This command does not require an intermediate JSONL file. It stores a full
+enrichment object in the list-local field named by --field. The raw Firecrawl
+page cache is per company; the prompt-specific answer is list-local DB state.
+It uses Firecrawl for both raw page caching and prompt-specific extraction.
+`,
+  )
+  .action(async (options) => {
+    const started = Date.now();
+    let readInstance: Awaited<ReturnType<typeof connectFcdxDb>>["instance"] | undefined;
+    let readConnection: Awaited<ReturnType<typeof connectFcdxDb>>["connection"] | undefined;
+    try {
+      const firecrawlApiKey = resolveConfigEnv("FIRECRAWL_API_KEY");
+      if (!firecrawlApiKey) throw new Error("FIRECRAWL_API_KEY is required. Set it with `fcdx config env set FIRECRAWL_API_KEY <key>` or export it.");
+      const connected = await connectFcdxDb(options.db);
+      readInstance = connected.instance;
+      readConnection = connected.connection;
+      const data = await showList(readConnection, { listName: options.list, limit: options.limit });
+      readConnection.closeSync();
+      readInstance.closeSync();
+      readConnection = undefined;
+      readInstance = undefined;
+
+      if (data.members.length === 0) throw new Error(`List has no members: ${options.list}`);
+      const limiter = pLimit(options.concurrency);
+      const results: EnrichedCompany[] = [];
+      let completed = 0;
+      let errors = 0;
+      await Promise.all(
+        data.members.map((member) =>
+          limiter(async () => {
+            const result = await enrichCompanyWithFirecrawl(member.company, {
+              apiKey: firecrawlApiKey,
+              outputDir: options.jsonlOutput ? path.dirname(options.jsonlOutput) : "output/enriched",
+              timeoutMs: options.timeoutMs,
+              cacheDir: options.cacheDir,
+              forceRefresh: options.forceRefresh,
+              customQuestion: options.question,
+            });
+            results.push(result);
+            completed += 1;
+            if (result.agent_metadata.error) errors += 1;
+            if (options.jsonlOutput) await appendJsonl(options.jsonlOutput, result);
+            if (options.progressEvery > 0 && (completed % options.progressEvery === 0 || completed === data.members.length)) {
+              console.error(`enriched ${completed}/${data.members.length} errors=${errors}`);
+            }
+          }),
+        ),
+      );
+
+      const { instance, connection } = await connectFcdxDb(options.db);
+      try {
+        for (const result of results) {
+          await setListFieldValue(connection, {
+            listName: options.list,
+            companyId: result.source_row.id,
+            fieldKey: options.field,
+            value: listEnrichmentValue(result),
+            fieldType: "object",
+            description: `Enrichment result for: ${options.question}`,
+            source: "enrich:list",
+            confidence: result.enrichment.custom_evaluation?.confidence,
+          });
+          await upsertFirecrawlCache(connection, {
+            companyId: result.source_row.id,
+            companyName: result.source_row.name,
+            website: result.source_row.website,
+            url: result.agent_metadata.url,
+            cacheDir: result.agent_metadata.cache_dir ?? path.join(options.cacheDir, result.source_row.id),
+            rawOutputPath: result.agent_metadata.raw_output_path,
+            finalUrl: result.agent_metadata.final_url,
+            title: result.agent_metadata.title,
+            error: result.agent_metadata.error,
+            elapsedMs: result.agent_metadata.elapsed_ms,
+          });
+        }
+      } finally {
+        connection.closeSync();
+        instance.closeSync();
+      }
+
+      console.log(
+        JSON.stringify(
+          {
+            list: options.list,
+            field: options.field,
+            companies: results.length,
+            errors,
+            question: options.question,
+            jsonlOutput: options.jsonlOutput,
+            elapsedMs: Date.now() - started,
+          },
+          null,
+          2,
+        ),
+      );
+    } catch (error) {
+      exitWithError(error);
+    } finally {
+      readConnection?.closeSync();
+      readInstance?.closeSync();
     }
   });
 
@@ -1542,6 +1672,266 @@ profile by "fcdx linkedin auth".
     }
   });
 
+linkedin
+  .command("people")
+  .description("Inspect LinkedIn people for companies in a list or one resolved company; does not write to DuckDB")
+  .option("--list <name>", "List name to inspect")
+  .option("--company <name>", "Company name, website, or LinkedIn substring; must resolve to exactly one DB row")
+  .option("--company-id <id...>", "Exact PDL company id(s); filters --list or selects specific companies")
+  .option("--country <country>", "Country filter for --company; pass '*' to search globally", "united states")
+  .option("--db <path>", "DuckDB path", resolveDbPath())
+  .option("--role <query>", "Role/title query for likely procurement influencers", "procurement supply chain operations manufacturing")
+  .option("--limit-companies <n>", "Maximum list companies to inspect", parseIntArg)
+  .option("--limit-per-company <n>", "Maximum LinkedIn profiles to return per company", parseIntArg, 10)
+  .option("--api <api>", "LinkedIn search API: classic, sales_navigator, or recruiter", "classic")
+  .option("--no-resolve-company", "Do not resolve company name to LinkedIn company IDs before searching")
+  .option("--account-id <accountId>", "Advanced: explicit Unipile LinkedIn account ID; otherwise uses the active profile")
+  .option("--profile <name>", "Local FCD-X profile whose LinkedIn account should be used", activeProfileName())
+  .option("--base-url <url>", "Unipile DSN/base URL; defaults to config env UNIPILE_BASE_URL")
+  .option("--access-token <token>", "Unipile access token; defaults to config env UNIPILE_ACCESS_TOKEN")
+  .option("--json", "Print JSON instead of a compact table", false)
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx linkedin people --list water-valve-qualified --role "procurement supply chain" --limit-per-company 10
+  fcdx linkedin people --company-id pdl_company_id_here --role "VP Procurement" --json
+  fcdx linkedin people --company "SMTC" --role "supply chain" --json
+
+Use this after qualification. It is intentionally read-only: the agent should
+inspect these people, choose the best contact, then call "fcdx lead find-email".
+`,
+  )
+  .action(async (options) => {
+    let instance: Awaited<ReturnType<typeof connectFcdxDb>>["instance"] | undefined;
+    let connection: Awaited<ReturnType<typeof connectFcdxDb>>["connection"] | undefined;
+    try {
+      if (!["classic", "sales_navigator", "recruiter"].includes(options.api)) {
+        throw new Error("--api must be one of classic, sales_navigator, recruiter");
+      }
+      const companyIds = optionArray(options.companyId);
+      const connected = await connectFcdxDb(options.db);
+      instance = connected.instance;
+      connection = connected.connection;
+      const companies = await resolvePeopleSearchCompanies(connection, {
+        listName: options.list,
+        company: options.company,
+        companyIds,
+        country: options.country === "*" ? undefined : options.country,
+        limitCompanies: options.limitCompanies,
+      });
+      connection.closeSync();
+      instance.closeSync();
+      connection = undefined;
+      instance = undefined;
+
+      const client = createUnipileClient(options);
+      const accountId = await resolveLinkedinAccountForProfile(client, options.profile, options.accountId);
+      const results: Array<{ company: CandidateCompany; roleQuery: string; profiles: Record<string, unknown>[] }> = [];
+      for (const company of companies) {
+        const companyMatches =
+          options.resolveCompany
+            ? await client.searchCompanyParameters({
+                accountId,
+                keywords: company.name,
+                service: serviceForApi(options.api),
+                limit: 5,
+              })
+            : [];
+        const linkedinCompanyIds = options.resolveCompany ? bestCompanyIds(company.name, companyMatches) : [];
+        const response = await client.searchLinkedinProfiles({
+          accountId,
+          company: company.name,
+          personTitle: options.role,
+          n: options.limitPerCompany,
+          api: options.api,
+          companyIds: linkedinCompanyIds,
+        });
+        const profiles = dedupeProfiles(response.items ?? [])
+          .slice(0, options.limitPerCompany)
+          .map((profile, index) => ({
+            rank: index + 1,
+            ...normalizeProfile(profile),
+            role_query: options.role,
+            relevance_reason: procurementRelevanceReason(profile),
+          }));
+        results.push({ company, roleQuery: options.role, profiles });
+      }
+
+      if (options.json) {
+        console.log(JSON.stringify({ profile: options.profile, results }, null, 2));
+        return;
+      }
+      for (const result of results) {
+        console.log(`${result.company.name}\t${result.company.id}\t${result.company.website}`);
+        if (result.profiles.length === 0) {
+          console.log("  No profiles found.");
+          continue;
+        }
+        for (const profile of result.profiles) {
+          console.log(`  ${profile.rank}. ${profile.name || "(unknown)"}\t${profile.linkedin_url || ""}\t${profile.headline || ""}`);
+        }
+      }
+    } catch (error) {
+      exitWithError(error);
+    } finally {
+      connection?.closeSync();
+      instance?.closeSync();
+    }
+  });
+
+const lead = program
+  .command("lead")
+  .description("Lead discovery and verified email workflows")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx linkedin people --list water-valve-qualified --role "procurement supply chain" --json
+  fcdx lead find-email --list water-valve-qualified --company-id pdl_company_id_here --first-name Jane --last-name Doe --domain example.com --role "VP Supply Chain"
+  fcdx list show --list water-valve-qualified --limit 10
+
+Subcommand options:
+  fcdx lead find-email --help
+`,
+  );
+
+lead
+  .command("find-email")
+  .description("Find and verify one selected person's email with Hunter, then store it as a list-local lead")
+  .requiredOption("--list <name>", "List name whose member should receive the lead field")
+  .option("--company-id <id>", "Exact PDL company id; preferred and required when names are ambiguous")
+  .option("--company <name>", "Company name, website, or LinkedIn substring; must resolve to exactly one DB row")
+  .option("--country <country>", "Country filter for --company; pass '*' to search globally", "united states")
+  .option("--db <path>", "DuckDB path", resolveDbPath())
+  .option("--first-name <name>", "Lead first name")
+  .option("--last-name <name>", "Lead last name")
+  .option("--full-name <name>", "Lead full name; used if first/last are not supplied")
+  .option("--role <role>", "Lead role/title at the company")
+  .option("--domain <domain>", "Company email domain; defaults to the company website domain")
+  .option("--linkedin-url <url>", "LinkedIn profile URL for provenance and Hunter linkedin_handle lookup")
+  .option("--field <key>", "List field that stores the lead array", "leads")
+  .option("--hunter-api-key <key>", "Hunter API key; defaults to config env HUNTER_API_KEY")
+  .option("--max-duration <n>", "Hunter Email Finder max duration in seconds", parseIntArg, 10)
+  .option("--allow-accept-all", "Allow Hunter accept_all results; default writes only status=valid", false)
+  .option("--replace", "Replace existing leads in this field instead of appending", false)
+  .option("--dry-run", "Print Hunter result but do not write to DuckDB", false)
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx lead find-email --list water-valve-qualified --company-id pdl_company_id_here --first-name Jane --last-name Doe --domain example.com --role "VP Supply Chain"
+  fcdx lead find-email --list targets --company-id pdl_company_id_here --full-name "Jane Doe" --linkedin-url "https://www.linkedin.com/in/janedoe"
+  fcdx lead find-email --list targets --company "SMTC" --first-name Jane --last-name Doe --role "Chief Procurement Officer"
+
+This command writes only verified emails by default. Hunter Email Finder must
+return verification.status=valid, and Hunter Email Verifier must also return
+status=valid. Use --allow-accept-all only when you explicitly want riskier
+accept-all addresses stored.
+`,
+  )
+  .action(async (options) => {
+    const { instance, connection } = await connectFcdxDb(options.db);
+    try {
+      const apiKey = options.hunterApiKey || resolveConfigEnv("HUNTER_API_KEY");
+      if (!apiKey) throw new Error("HUNTER_API_KEY is required. Set it with `fcdx config env set HUNTER_API_KEY <key>` or pass --hunter-api-key.");
+      const country = options.country === "*" ? undefined : options.country;
+      const resolvedCompany = await resolveCompanyId(connection, {
+        companyId: options.companyId,
+        company: options.company,
+        country,
+      });
+      const data = await showList(connection, { listName: options.list });
+      const member = data.members.find((row) => row.company.id === resolvedCompany.id);
+      if (!member) {
+        throw new Error(`Company ${resolvedCompany.id} is not a member of list ${options.list}`);
+      }
+
+      const name = resolveLeadName({ firstName: options.firstName, lastName: options.lastName, fullName: options.fullName });
+      const domain = normalizeEmailDomain(options.domain || domainFromWebsite(member.company.website || member.company.url));
+      const hunter = new HunterClient({ apiKey });
+      const finder = await hunter.findEmail({
+        domain,
+        firstName: name.firstName,
+        lastName: name.lastName,
+        fullName: name.fullName,
+        linkedinHandle: domain ? undefined : linkedinHandleFromUrl(options.linkedinUrl),
+        maxDuration: options.maxDuration,
+      });
+      const found = finder.data;
+      const email = found?.email;
+      if (!email) {
+        console.log(JSON.stringify({ written: false, reason: "Hunter did not return an email", finder: summarizeHunterFinder(found) }, null, 2));
+        return;
+      }
+      const verifier = await hunter.verifyEmail(email);
+      const allowedStatuses = new Set(options.allowAcceptAll ? ["valid", "accept_all"] : ["valid"]);
+      const finderStatus = found?.verification?.status;
+      const verifierStatus = verifier.data?.status;
+      const verified = Boolean(finderStatus && verifierStatus && allowedStatuses.has(finderStatus) && allowedStatuses.has(verifierStatus));
+      const leadValue = buildLeadValue({
+        requestedName: name,
+        role: options.role,
+        linkedinUrl: options.linkedinUrl,
+        company: member.company,
+        domain,
+        finder: found,
+        verifier: verifier.data,
+      });
+      if (!verified) {
+        console.log(
+          JSON.stringify(
+            {
+              written: false,
+              reason: "Hunter email was not verified enough to store",
+              requiredStatuses: [...allowedStatuses],
+              finderStatus,
+              verifierStatus,
+              lead: leadValue,
+            },
+            null,
+            2,
+          ),
+        );
+        return;
+      }
+
+      const existing = member.fields[options.field];
+      const nextLeads = options.replace ? [leadValue] : appendLeadValue(existing, leadValue);
+      if (!options.dryRun) {
+        await setListFieldValue(connection, {
+          listName: options.list,
+          companyId: member.company.id,
+          fieldKey: options.field,
+          value: nextLeads,
+          fieldType: "array",
+          description: "Verified lead contacts selected after LinkedIn inspection and Hunter email verification",
+          source: "hunter:email-finder",
+          confidence: typeof verifier.data?.score === "number" ? verifier.data.score / 100 : undefined,
+        });
+      }
+      console.log(
+        JSON.stringify(
+          {
+            written: !options.dryRun,
+            list: options.list,
+            field: options.field,
+            company: member.company,
+            lead: leadValue,
+            totalLeads: nextLeads.length,
+          },
+          null,
+          2,
+        ),
+      );
+    } catch (error) {
+      exitWithError(error);
+    } finally {
+      connection.closeSync();
+      instance.closeSync();
+    }
+  });
+
 const target = program
   .command("target")
   .description("Target-category comparison and shortlist commands")
@@ -1751,6 +2141,182 @@ function createUnipileClient(options: { baseUrl?: string; accessToken?: string }
   if (!baseUrl) throw new Error("UNIPILE_BASE_URL is required. Set it with `fcdx config env set UNIPILE_BASE_URL <url>` or pass --base-url.");
   if (!accessToken) throw new Error("UNIPILE_ACCESS_TOKEN is required. Set it with `fcdx config env set UNIPILE_ACCESS_TOKEN <token>` or pass --access-token.");
   return new UnipileClient({ baseUrl, accessToken });
+}
+
+async function resolvePeopleSearchCompanies(
+  connection: DuckDBConnection,
+  input: {
+    listName?: string;
+    company?: string;
+    companyIds?: string[];
+    country?: string;
+    limitCompanies?: number;
+  },
+): Promise<CandidateCompany[]> {
+  if (!input.listName && !input.company && (!input.companyIds || input.companyIds.length === 0)) {
+    throw new Error("Provide --list, --company, or --company-id");
+  }
+
+  const companyIdSet = new Set(input.companyIds ?? []);
+  if (input.listName) {
+    const list = await showList(connection, { listName: input.listName });
+    let companies = list.members.map((member) => member.company);
+    if (companyIdSet.size > 0) companies = companies.filter((company) => companyIdSet.has(company.id));
+    if (input.limitCompanies !== undefined) companies = companies.slice(0, input.limitCompanies);
+    if (companies.length === 0) throw new Error(`No companies selected from list ${input.listName}`);
+    return companies;
+  }
+
+  const companies: CandidateCompany[] = [];
+  if (input.companyIds) {
+    for (const companyId of input.companyIds) {
+      companies.push(await resolveCompanyId(connection, { companyId }));
+    }
+  }
+  if (input.company) {
+    companies.push(await resolveCompanyId(connection, { company: input.company, country: input.country }));
+  }
+  return dedupeCompanies(companies).slice(0, input.limitCompanies);
+}
+
+function dedupeCompanies(companies: CandidateCompany[]): CandidateCompany[] {
+  const seen = new Set<string>();
+  const rows: CandidateCompany[] = [];
+  for (const company of companies) {
+    if (seen.has(company.id)) continue;
+    seen.add(company.id);
+    rows.push(company);
+  }
+  return rows;
+}
+
+function dedupeProfiles(profiles: LinkedinSearchProfile[]): LinkedinSearchProfile[] {
+  const seen = new Set<string>();
+  const rows: LinkedinSearchProfile[] = [];
+  for (const profile of profiles) {
+    const key = normalizeLinkedinProfileUrl(profile) || profile.id || profile.public_identifier || profile.name;
+    if (key && seen.has(key)) continue;
+    if (key) seen.add(key);
+    rows.push(profile);
+  }
+  return rows;
+}
+
+function procurementRelevanceReason(profile: LinkedinSearchProfile): string {
+  const text = `${profile.headline ?? ""} ${profile.name ?? ""}`.toLowerCase();
+  if (/chief|cpo|vp|vice president|head|director/.test(text) && /procurement|supply chain|sourcing|purchasing/.test(text)) {
+    return "Senior procurement/supply-chain title; likely close to purchasing decisions.";
+  }
+  if (/procurement|supply chain|sourcing|purchasing/.test(text)) return "Procurement or supply-chain title.";
+  if (/operations|manufacturing|plant|general manager|gm/.test(text)) return "Operations/manufacturing leadership title; may influence procurement.";
+  if (/chief|president|founder|owner|ceo|coo/.test(text)) return "Executive title; may influence vendor decisions.";
+  return "Returned by LinkedIn role query; inspect manually before lead lookup.";
+}
+
+function optionArray(value: string[] | string | undefined): string[] | undefined {
+  if (Array.isArray(value)) return value.flatMap((item) => item.split(",")).map((item) => item.trim()).filter(Boolean);
+  if (typeof value === "string") return value.split(",").map((item) => item.trim()).filter(Boolean);
+  return undefined;
+}
+
+function resolveLeadName(input: { firstName?: string; lastName?: string; fullName?: string }): { firstName?: string; lastName?: string; fullName?: string } {
+  const firstName = input.firstName?.trim();
+  const lastName = input.lastName?.trim();
+  const fullName = input.fullName?.trim();
+  if (firstName && lastName) return { firstName, lastName, fullName: fullName || `${firstName} ${lastName}` };
+  if (!fullName) throw new Error("Provide --first-name and --last-name, or --full-name");
+  const parts = fullName.split(/\s+/).filter(Boolean);
+  if (parts.length < 2) throw new Error("--full-name must include at least first and last name");
+  return {
+    firstName: firstName || parts[0],
+    lastName: lastName || parts.slice(1).join(" "),
+    fullName,
+  };
+}
+
+function domainFromWebsite(website: string): string {
+  try {
+    const url = new URL(website.startsWith("http") ? website : `https://${website}`);
+    return url.hostname;
+  } catch {
+    return website;
+  }
+}
+
+function normalizeEmailDomain(domain: string): string {
+  return domain
+    .trim()
+    .replace(/^https?:\/\//i, "")
+    .replace(/^www\./i, "")
+    .split("/")[0]
+    .split("?")[0]
+    .toLowerCase();
+}
+
+function summarizeHunterFinder(data: HunterEmailFinderData | undefined): Record<string, unknown> | undefined {
+  if (!data) return undefined;
+  return {
+    email: data.email,
+    score: data.score,
+    domain: data.domain,
+    company: data.company,
+    position: data.position,
+    verification_status: data.verification?.status,
+  };
+}
+
+function buildLeadValue(input: {
+  requestedName: { firstName?: string; lastName?: string; fullName?: string };
+  role?: string;
+  linkedinUrl?: string;
+  company: CandidateCompany;
+  domain: string;
+  finder?: HunterEmailFinderData;
+  verifier?: HunterEmailVerifierData;
+}): Record<string, unknown> {
+  const found = input.finder;
+  const firstName = input.requestedName.firstName || found?.first_name;
+  const lastName = input.requestedName.lastName || found?.last_name;
+  return {
+    first_name: firstName,
+    last_name: lastName,
+    full_name: input.requestedName.fullName || [firstName, lastName].filter(Boolean).join(" "),
+    email: found?.email,
+    role: input.role || found?.position,
+    company_id: input.company.id,
+    company_name: input.company.name,
+    domain: input.domain,
+    linkedin_url: input.linkedinUrl || found?.linkedin_url,
+    source: "hunter:email-finder",
+    verification_status: found?.verification?.status,
+    verifier_status: input.verifier?.status,
+    verifier_result: input.verifier?.result,
+    confidence: typeof input.verifier?.score === "number" ? input.verifier.score / 100 : typeof found?.score === "number" ? found.score / 100 : undefined,
+    hunter: {
+      email_finder: {
+        score: found?.score,
+        domain: found?.domain,
+        company: found?.company,
+        position: found?.position,
+        source_type: found?.source_type,
+        verification: found?.verification,
+        sources: found?.sources,
+      },
+      verifier: input.verifier,
+    },
+    added_at: new Date().toISOString(),
+  };
+}
+
+function appendLeadValue(existing: unknown, lead: Record<string, unknown>): Record<string, unknown>[] {
+  const rows = Array.isArray(existing)
+    ? existing.filter((row): row is Record<string, unknown> => Boolean(row && typeof row === "object"))
+    : existing && typeof existing === "object"
+      ? [existing as Record<string, unknown>]
+      : [];
+  const email = typeof lead.email === "string" ? lead.email.toLowerCase() : undefined;
+  const filtered = email ? rows.filter((row) => String(row.email ?? "").toLowerCase() !== email) : rows;
+  return [...filtered, lead];
 }
 
 async function resolveLinkedinAccountForProfile(
@@ -1966,6 +2532,24 @@ function resolveCustomQuestion(question?: string, prompt?: string): string | und
   return normalizedQuestion || normalizedPrompt || undefined;
 }
 
+function listEnrichmentValue(result: EnrichedCompany): Record<string, unknown> {
+  return {
+    question: result.enrichment.custom_evaluation?.question,
+    custom_evaluation: result.enrichment.custom_evaluation,
+    company_summary: result.enrichment.company_summary,
+    target_alignment: result.enrichment.target_alignment,
+    standard_questions: {
+      supplies_datacenters: result.enrichment.supplies_datacenters,
+      manufacturing_or_factories: result.enrichment.manufacturing_or_factories,
+      high_volume_or_high_mix: result.enrichment.high_volume_or_high_mix,
+      large_procurement_team: result.enrichment.large_procurement_team,
+      turnkey_contract_manufacturer: result.enrichment.turnkey_contract_manufacturer,
+    },
+    final_notes: result.enrichment.final_notes,
+    agent_metadata: result.agent_metadata,
+  };
+}
+
 async function writeListExport(
   pathname: string,
   members: Awaited<ReturnType<typeof showList>>["members"],
@@ -2099,6 +2683,9 @@ function exitWithError(error: unknown): never {
     ) {
       console.error("Hint: verify UNIPILE_BASE_URL is the tenant DSN from the Unipile dashboard and that the API workspace is active.");
     }
+  } else if (error instanceof HunterApiError) {
+    console.error(error.message);
+    console.error(JSON.stringify(error.body, null, 2));
   } else if (error instanceof AmbiguousCompanyMatchError) {
     console.error(error.message);
     console.error(

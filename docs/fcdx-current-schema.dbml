@@ -4,9 +4,10 @@
 // Notes:
 // - DuckDB tables currently do not declare foreign key constraints.
 //   The Ref blocks below document the logical/application-level relationships.
-// - Full agent enrichment results are intentionally file-backed JSONL/CSV today.
-//   DuckDB stores source company data, Firecrawl cache metadata, lists, list fields,
-//   tags, and tag mappings.
+// - File enrichment can still write JSONL/CSV outputs, but list enrichment now
+//   stores prompt-specific results in list_field_values.
+// - DuckDB stores source company data, Firecrawl cache metadata, lists,
+//   list-local field definitions and values, tags, and tag mappings.
 
 Project fcdx {
   database_type: "DuckDB"
@@ -15,8 +16,9 @@ Project fcdx {
 
     Canonical company rows live in companies.
     Agent/user workspace state lives in separate list and tag tables.
-    Firecrawl raw artifacts and enriched JSONL/CSV live on the filesystem;
-    firecrawl_cache stores cache pointers and crawl metadata.
+    Firecrawl raw artifacts live on the filesystem; firecrawl_cache stores cache
+    pointers and crawl metadata. Prompt-specific enrichment for lists lives in
+    list-local fields.
   '''
 }
 
@@ -61,6 +63,7 @@ Table firecrawl_cache {
   Note: '''
     One latest Firecrawl cache pointer per company.
     Raw page artifacts are stored on disk under cache_dir, not in DuckDB.
+    Prompt-specific enrichment answers are not stored here.
   '''
 }
 
@@ -114,8 +117,9 @@ Table list_fields {
   }
 
   Note: '''
-    Flexible list-local field definitions, e.g. ceo_name, ceo_linkedin_url,
-    agent_fit_score. These do not mutate the canonical companies table.
+    Flexible list-local field definitions, e.g. valve_enrichment, leads,
+    ceo_name, ceo_linkedin_url, agent_fit_score. These do not mutate the
+    canonical companies table.
   '''
 }
 
@@ -136,7 +140,9 @@ Table list_field_values {
   Note: '''
     Per-company values for list-local fields.
     Scoped by list_id so different lists can store different values
-    for the same company and field_key.
+    for the same company and field_key. List enrichment stores its full
+    prompt-specific object in value_json. Verified lead lookup stores a lead
+    array here, usually under field_key = "leads".
   '''
 }
 

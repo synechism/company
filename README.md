@@ -97,9 +97,10 @@ Common environment variables:
 - `FCDX_DB_PATH`: fallback DuckDB path if config does not set `dbPath`.
 - `PDL_COMPANY_CSV`: fallback CSV path if config does not set `datasetPath`.
 - `FCDX_PARQUET_PATH`: fallback Parquet path if config does not set `parquetPath`.
-- `FIRECRAWL_API_KEY`: required for `fcdx crawl` and `fcdx enrich file`.
+- `FIRECRAWL_API_KEY`: required for `fcdx crawl`, `fcdx enrich file`, and `fcdx enrich list`.
 - `UNIPILE_BASE_URL`: Unipile tenant DSN/base URL.
 - `UNIPILE_ACCESS_TOKEN`: Unipile API key.
+- `HUNTER_API_KEY`: Hunter API key for verified lead email lookup.
 
 Do not commit `.env` files.
 
@@ -115,6 +116,7 @@ binary works from any directory:
 fcdx config env set FIRECRAWL_API_KEY fc-...
 fcdx config env set UNIPILE_BASE_URL https://api51.unipile.com:18107
 fcdx config env set UNIPILE_ACCESS_TOKEN <token>
+fcdx config env set HUNTER_API_KEY <token>
 fcdx config env list
 ```
 
@@ -129,12 +131,15 @@ cp .env.example .env
 Then fill in the services you plan to use:
 
 ```env
-# Required for fcdx crawl and fcdx enrich file
+# Required for fcdx crawl, fcdx enrich file, and fcdx enrich list
 FIRECRAWL_API_KEY=fc-...
 
-# Required for fcdx linkedin auth and fcdx linkedin list-profiles
+# Required for fcdx linkedin auth, list-profiles, and people
 UNIPILE_BASE_URL=https://api51.unipile.com:18107
 UNIPILE_ACCESS_TOKEN=...
+
+# Required for fcdx lead find-email
+HUNTER_API_KEY=...
 ```
 
 You can also pass credentials for a single command:
@@ -155,6 +160,7 @@ fcdx linkedin auth
 fcdx linkedin accounts
 fcdx linkedin use-account --handle "Jane Doe"
 fcdx linkedin list-profiles --company "cronwell ai" --p CEO --n 5
+fcdx linkedin people --list qualified-targets --role "procurement supply chain" --json
 ```
 
 ## Development
@@ -286,6 +292,23 @@ FIRECRAWL_API_KEY=... fcdx enrich file \
   --resume
 ```
 
+Or enrich a DuckDB list directly and store the result back on that list:
+
+```bash
+fcdx enrich list \
+  --list water-infra \
+  --field water_valve_enrichment \
+  --question "Does this company manufacture water valves or waterworks flow-control valves?" \
+  --concurrency 10
+
+fcdx list show --list water-infra --limit 10
+```
+
+`enrich list` caches raw Firecrawl page data per company and stores the
+prompt-specific answer in list-local DuckDB fields. Overlapping lists can have
+different enrichment columns, e.g. `thermal_enrichment` on one list and
+`water_valve_enrichment` on another, without mutating the source company table.
+
 The enriched JSONL preserves the source company row and appends answers,
 confidence, reasons, and evidence for:
 
@@ -297,8 +320,9 @@ confidence, reasons, and evidence for:
 - procurement-first target alignment with the PDF categories, including
   manufacturing/procurement/category/data-center sub-scores
 
-Full enrichment outputs are intentionally file-backed. DuckDB stores company
-data, Firecrawl cache metadata, lists, list-local fields, tags, and tag mappings.
+File enrichment outputs are file-backed. List enrichment writes prompt-specific
+results into `list_field_values` while DuckDB continues to store company data,
+Firecrawl cache metadata, lists, list-local fields, tags, and tag mappings.
 
 ## Company Resolution
 
@@ -371,12 +395,30 @@ from an agent loop or add a bulk command when applying many updates.
 
 ## LinkedIn
 
-LinkedIn commands use Unipile.
+LinkedIn commands use Unipile. `list-profiles` is useful for one-off searches;
+`people` is intended for the qualified-list workflow and does not write to the
+database.
 
 ```bash
 fcdx linkedin auth
 fcdx linkedin list-profiles --company "cronwell ai" --n 5
 fcdx linkedin list-profiles --company "cronwell ai" --p CEO --n 5
+fcdx linkedin people --list water-valve-qualified --role "procurement supply chain" --limit-per-company 10 --json
+```
+
+After the agent selects a contact from `linkedin people`, use Hunter to find and
+verify the email. Verified leads are stored as a list-local `leads` array field.
+
+```bash
+fcdx lead find-email \
+  --list water-valve-qualified \
+  --company-id pdl_company_id_here \
+  --first-name Jane \
+  --last-name Doe \
+  --domain example.com \
+  --role "VP Supply Chain"
+
+fcdx list show --list water-valve-qualified --limit 10
 ```
 
 ## Target Helpers

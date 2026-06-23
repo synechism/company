@@ -77,6 +77,8 @@ export type EnrichedCompany = {
     title?: string;
     elapsed_ms: number;
     raw_output_path?: string;
+    cache_dir?: string;
+    crawl_cache_hit?: boolean;
     error?: string;
   };
 };

@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import path from "node:path";
 import fs from "node:fs/promises";
 import type { CandidateCompany, CompanyEnrichment, EnrichedCompany } from "../types.js";
@@ -8,7 +7,6 @@ import {
   buildEnrichmentPrompt,
   buildEnrichmentSchema,
   emptyEnrichment,
-  TARGET_ALIGNMENT_SCHEMA_VERSION,
 } from "./questions.js";
 
 type FirecrawlJsonScrapeResponse = {
@@ -30,6 +28,18 @@ type FirecrawlJsonScrapeResponse = {
   warning?: string;
 };
 
+type FirecrawlPageScrapeResponse = Omit<FirecrawlJsonScrapeResponse, "data"> & {
+  data?: Omit<NonNullable<FirecrawlJsonScrapeResponse["data"]>, "json">;
+};
+
+type CachedPagePayload = {
+  ok: boolean;
+  status: number;
+  raw: FirecrawlPageScrapeResponse;
+  error?: string;
+  cacheHit: boolean;
+};
+
 export type FirecrawlEnrichOptions = {
   apiKey: string;
   outputDir: string;
@@ -48,25 +58,9 @@ export async function enrichCompanyWithFirecrawl(
   const cachePayloadPath = firecrawlCachePayloadPath(company, options);
 
   try {
-    let payload = await readCachedFirecrawlPayload(cachePayloadPath, options);
-    if (!payload) {
-      payload = await scrapeJson(company.url, company.name, options);
-      if (payload.error && company.url.startsWith("https://")) {
-        payload = await scrapeJson(company.url.replace(/^https:\/\//i, "http://"), company.name, options);
-      }
-      if (cachePayloadPath) {
-        await ensureDir(path.dirname(cachePayloadPath));
-        await writeJson(cachePayloadPath, {
-          cachedAt: new Date().toISOString(),
-          companyId: company.id,
-          companyName: company.name,
-          url: company.url,
-          ...payload,
-        });
-      }
-    }
+    const page = await crawlCompanyPageWithFirecrawl(company, options);
+    const payload = await enrichFromFirecrawlJson(company, options);
     await writeJson(rawOutputPath, payload.raw);
-    await writeFirecrawlArtifacts(company, options, payload.raw);
 
     const data = payload.raw.data;
     const metadata = data?.metadata;
@@ -79,10 +73,12 @@ export async function enrichCompanyWithFirecrawl(
       agent_metadata: {
         backend: "firecrawl_scrape_json",
         url: company.url,
-        final_url: metadata?.sourceURL ?? metadata?.url,
-        title: metadata?.title,
+        final_url: metadata?.sourceURL ?? metadata?.url ?? page.raw.data?.metadata?.sourceURL ?? page.raw.data?.metadata?.url,
+        title: metadata?.title ?? page.raw.data?.metadata?.title,
         elapsed_ms: Date.now() - started,
         raw_output_path: rawOutputPath,
+        cache_dir: options.cacheDir ? firecrawlCompanyCacheDir(company, options.cacheDir) : undefined,
+        crawl_cache_hit: page.cacheHit,
         error:
           payload.ok && payload.raw.success !== false && !apiError
             ? undefined
@@ -104,50 +100,103 @@ export async function enrichCompanyWithFirecrawl(
   }
 }
 
+export async function crawlCompanyPageWithFirecrawl(
+  company: CandidateCompany,
+  options: FirecrawlEnrichOptions,
+): Promise<CachedPagePayload> {
+  const cachePayloadPath = firecrawlCachePayloadPath(company, options);
+  const cached = await readCachedFirecrawlPage(cachePayloadPath, options.forceRefresh);
+  if (cached) return cached;
+
+  let payload = await scrapePage(company.url, options);
+  if (payload.error && company.url.startsWith("https://")) {
+    payload = await scrapePage(company.url.replace(/^https:\/\//i, "http://"), options);
+  }
+  if (cachePayloadPath) {
+    await ensureDir(path.dirname(cachePayloadPath));
+    await writeJson(cachePayloadPath, {
+      cachedAt: new Date().toISOString(),
+      companyId: company.id,
+      companyName: company.name,
+      url: company.url,
+      ...payload,
+    });
+  }
+  await writeFirecrawlArtifacts(company, options, payload.raw);
+  return { ...payload, cacheHit: false };
+}
+
 export function firecrawlCompanyCacheDir(company: CandidateCompany, cacheRoot: string): string {
   return path.join(cacheRoot, safeName(company.id || company.name));
 }
 
 function firecrawlRawOutputPath(company: CandidateCompany, options: FirecrawlEnrichOptions): string {
-  const suffix = enrichmentCacheSuffix(options);
-  if (options.cacheDir) return path.join(firecrawlCompanyCacheDir(company, options.cacheDir), `raw${suffix}.firecrawl.json`);
-  return path.join(options.outputDir, "raw", `${safeName(company.id)}${suffix}.firecrawl.json`);
+  return path.join(options.outputDir, "raw", `${safeName(company.id)}.enrichment.json`);
 }
 
 function firecrawlCachePayloadPath(company: CandidateCompany, options: FirecrawlEnrichOptions): string | undefined {
   if (!options.cacheDir) return undefined;
-  return path.join(firecrawlCompanyCacheDir(company, options.cacheDir), `payload${enrichmentCacheSuffix(options)}.firecrawl.json`);
+  return path.join(firecrawlCompanyCacheDir(company, options.cacheDir), "payload.firecrawl.json");
 }
 
-async function readCachedFirecrawlPayload(
+async function readCachedFirecrawlPage(
   pathname: string | undefined,
-  options: FirecrawlEnrichOptions,
-): Promise<{ ok: boolean; status: number; raw: FirecrawlJsonScrapeResponse; error?: string } | undefined> {
-  if (!pathname || options.forceRefresh) return undefined;
+  forceRefresh = false,
+): Promise<CachedPagePayload | undefined> {
+  if (!pathname || forceRefresh) return undefined;
   try {
     const parsed = JSON.parse(await fs.readFile(pathname, "utf8")) as {
       ok?: boolean;
       status?: number;
-      raw?: FirecrawlJsonScrapeResponse;
+      raw?: FirecrawlJsonScrapeResponse | FirecrawlPageScrapeResponse;
       error?: string;
     };
     if (parsed.raw && typeof parsed.status === "number") {
-      const alignment = parsed.raw.data?.json?.target_alignment;
-      if (parsed.raw.data?.json && alignment?.schema_version !== TARGET_ALIGNMENT_SCHEMA_VERSION) return undefined;
-      if (options.customQuestion && parsed.raw.data?.json?.custom_evaluation?.question !== options.customQuestion) {
-        return undefined;
+      const hadCachedJson = Boolean((parsed.raw as FirecrawlJsonScrapeResponse).data?.json);
+      const raw = stripJsonFromPagePayload(parsed.raw);
+      if (hadCachedJson) {
+        await writeJson(pathname, { ...parsed, raw });
       }
       return {
         ok: parsed.ok ?? (parsed.status >= 200 && parsed.status < 300),
         status: parsed.status,
-        raw: parsed.raw,
+        raw,
         error: parsed.error,
+        cacheHit: true,
       };
     }
   } catch {
     return undefined;
   }
   return undefined;
+}
+
+async function scrapePage(
+  url: string,
+  options: FirecrawlEnrichOptions,
+): Promise<{ ok: boolean; status: number; raw: FirecrawlPageScrapeResponse; error?: string }> {
+  const response = await fetch("https://api.firecrawl.dev/v2/scrape", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${options.apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      url,
+      formats: ["markdown", "html", "screenshot"],
+      onlyMainContent: false,
+      timeout: options.timeoutMs,
+    }),
+    signal: AbortSignal.timeout(options.timeoutMs + 10_000),
+  });
+
+  const raw = (await response.json().catch(() => ({}))) as FirecrawlPageScrapeResponse;
+  return {
+    ok: response.ok,
+    status: response.status,
+    raw: stripJsonFromPagePayload(raw),
+    error: raw.error,
+  };
 }
 
 async function scrapeJson(
@@ -188,10 +237,21 @@ async function scrapeJson(
   };
 }
 
-function enrichmentCacheSuffix(options: FirecrawlEnrichOptions): string {
-  if (!options.customQuestion) return "";
-  const hash = createHash("sha256").update(options.customQuestion).digest("hex").slice(0, 12);
-  return `.custom-${hash}`;
+async function enrichFromFirecrawlJson(
+  company: CandidateCompany,
+  options: FirecrawlEnrichOptions,
+): Promise<{ ok: boolean; status: number; raw: FirecrawlJsonScrapeResponse; error?: string }> {
+  let payload = await scrapeJson(company.url, company.name, options);
+  if (payload.error && company.url.startsWith("https://")) {
+    payload = await scrapeJson(company.url.replace(/^https:\/\//i, "http://"), company.name, options);
+  }
+  return payload;
+}
+
+function stripJsonFromPagePayload(raw: FirecrawlJsonScrapeResponse | FirecrawlPageScrapeResponse): FirecrawlPageScrapeResponse {
+  if (!raw.data) return raw as FirecrawlPageScrapeResponse;
+  const { json: _json, ...data } = raw.data as NonNullable<FirecrawlJsonScrapeResponse["data"]>;
+  return { ...raw, data };
 }
 
 async function writeFirecrawlArtifacts(
