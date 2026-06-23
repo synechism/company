@@ -269,6 +269,23 @@ FIRECRAWL_API_KEY=... fcdx enrich file \
   --concurrency 2
 ```
 
+For task-specific sourcing, prefer enriching the full bounded candidate set
+instead of doing narrow keyword filtering over company names/domains. For
+example, if a list or candidate file has fewer than about 10,000 companies:
+
+```bash
+fcdx list export --list water-infra --format candidates-jsonl --output output/candidates/water-infra.jsonl
+
+FIRECRAWL_API_KEY=... fcdx enrich file \
+  --input output/candidates/water-infra.jsonl \
+  --output output/enriched/water-infra.jsonl \
+  --summary output/enriched/water-infra-summary.json \
+  --csv-output output/enriched/water-infra.csv \
+  --question "Does this company manufacture water valves or waterworks flow-control valves?" \
+  --concurrency 10 \
+  --resume
+```
+
 The enriched JSONL preserves the source company row and appends answers,
 confidence, reasons, and evidence for:
 
@@ -316,6 +333,8 @@ fcdx list add --list thermal-cooling --from-jsonl output/candidates/db-strict.js
 fcdx list set-field --list thermal-cooling --company-id pdl_company_id_here --field ceo_name --value "Jane Doe" --type person
 fcdx list show --list thermal-cooling --limit 25
 fcdx list stats --list thermal-cooling
+fcdx list export --list thermal-cooling --format csv --output output/lists/thermal-cooling.csv
+fcdx list export --list thermal-cooling --format candidates-jsonl --output output/candidates/thermal-cooling.jsonl
 fcdx list delete-entry --list thermal-cooling --company-id pdl_company_id_here
 ```
 
@@ -327,6 +346,7 @@ Useful commands:
 - `list remove --list <name>`: remove one company from a list by unambiguous name or exact id.
 - `list delete-entry --list <name> --company-id <id>`: remove a specific list entry by id.
 - `list show --list <name>`: show members with list-specific fields and global tags.
+- `list export --list <name>`: export to `csv`, member `jsonl`, or `candidates-jsonl` for `fcdx enrich file`.
 - `list stats --list <name>`: summarize industry, size, fields, and tags.
 - `list set-field --list <name>`: define a list-local field or set a field value for one company.
 - `list fields --list <name>`: show list-local field definitions and value counts.

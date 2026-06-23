@@ -41,6 +41,10 @@ export type EnrichmentAnswer = {
   evidence: string[];
 };
 
+export type CustomEvaluation = EnrichmentAnswer & {
+  question: string;
+};
+
 export type TargetAlignment = {
   schema_version: string;
   score: number;
@@ -58,6 +62,7 @@ export type TargetAlignment = {
 
 export type CompanyEnrichment = Record<EnrichmentQuestionKey, EnrichmentAnswer> & {
   company_summary: string;
+  custom_evaluation?: CustomEvaluation;
   target_alignment: TargetAlignment;
   final_notes: string;
 };

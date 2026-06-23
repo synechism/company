@@ -615,6 +615,8 @@ enrich
   .option("--timeout-ms <n>", "Per-company Firecrawl timeout", parseIntArg, 120_000)
   .option("--cache-dir <path>", "Firecrawl filesystem cache root", resolveFirecrawlCacheDir())
   .option("--force-refresh", "Bypass cached Firecrawl payloads", false)
+  .option("--question <text>", "Experiment-specific yes/no question to answer for every company")
+  .option("--prompt <text>", "Alias for --question; use for task-specific enrichment criteria")
   .option("--website <host...>", "Only enrich candidates matching these websites/domains")
   .option("--resume", "Keep existing output JSONL and skip source ids already present", false)
   .option("--progress-every <n>", "Log progress every N completed companies", parseIntArg, 25)
@@ -624,6 +626,7 @@ enrich
 Examples:
   fcdx enrich file --input output/candidates/targets.jsonl --output output/enriched/targets.jsonl --summary output/enriched/targets-summary.json
   fcdx enrich file --input output/candidates/targets.jsonl --limit 25 --concurrency 5 --resume
+  fcdx enrich file --input output/candidates/water-infra.jsonl --question "Does this company manufacture water valves or waterworks flow-control valves?"
   fcdx enrich file --input output/candidates/targets.jsonl --website smtc.com tateglobal.com
 `,
   )
@@ -631,6 +634,7 @@ Examples:
     try {
       const firecrawlApiKey = resolveConfigEnv("FIRECRAWL_API_KEY");
       if (!firecrawlApiKey) throw new Error("FIRECRAWL_API_KEY is required. Set it with `fcdx config env set FIRECRAWL_API_KEY <key>` or export it.");
+      const customQuestion = resolveCustomQuestion(options.question, options.prompt);
       const summary = await runBatchEnrichment({
         apiKey: firecrawlApiKey,
         input: options.input,
@@ -643,6 +647,7 @@ Examples:
         timeoutMs: options.timeoutMs,
         cacheDir: options.cacheDir,
         forceRefresh: options.forceRefresh,
+        customQuestion,
         website: options.website,
         resume: options.resume,
         progressEvery: options.progressEvery,
@@ -667,12 +672,14 @@ Examples:
   fcdx list set-field --list targets --field ceo_name --type person
   fcdx list set-field --list targets --company-id pdl_company_id_here --field ceo_name --value "Jane Doe"
   fcdx list delete-entry --list targets --company-id pdl_company_id_here
+  fcdx list export --list targets --format csv --output output/lists/targets.csv
   fcdx list show --list targets --limit 25
 
 Subcommand options:
   fcdx list create --help
   fcdx list add --help
   fcdx list delete-entry --help
+  fcdx list export --help
   fcdx list set-field --help
   fcdx list show --help
   fcdx list delete --help
@@ -917,6 +924,41 @@ Examples:
     const { instance, connection } = await connectFcdxDb(options.db);
     try {
       console.log(JSON.stringify(await showList(connection, { listName: resolveListName(name, options.list), limit: options.limit }), null, 2));
+    } catch (error) {
+      exitWithError(error);
+    } finally {
+      connection.closeSync();
+      instance.closeSync();
+    }
+  });
+
+list
+  .command("export [name]")
+  .description("Export a list to CSV, member JSONL, or candidate JSONL for enrichment")
+  .option("--list <name>", "List name")
+  .option("--db <path>", "DuckDB path", resolveDbPath())
+  .option("--format <format>", "Export format: csv, jsonl, or candidates-jsonl", "csv")
+  .requiredOption("-o, --output <path>", "Output path")
+  .option("--limit <n>", "Maximum rows to export", parseIntArg)
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx list export --list targets --format csv --output output/lists/targets.csv
+  fcdx list export --list targets --format jsonl --output output/lists/targets.jsonl
+
+  # Candidate JSONL is compatible with fcdx enrich file.
+  fcdx list export --list targets --format candidates-jsonl --output output/candidates/targets.jsonl
+  fcdx enrich file --input output/candidates/targets.jsonl --question "Does this company manufacture water valves?"
+`,
+  )
+  .action(async (name, options) => {
+    const { instance, connection } = await connectFcdxDb(options.db);
+    try {
+      const listName = resolveListName(name, options.list);
+      const data = await showList(connection, { listName, limit: options.limit });
+      await writeListExport(options.output, data.members, options.format);
+      console.log(JSON.stringify({ list: data.list.name, rows: data.members.length, format: options.format, output: options.output }, null, 2));
     } catch (error) {
       exitWithError(error);
     } finally {
@@ -1913,6 +1955,92 @@ function resolveNamedArg(label: string, positionalName?: string, optionName?: st
   const name = optionName ?? positionalName;
   if (!name) throw new Error(`Provide --${label} <name>`);
   return name;
+}
+
+function resolveCustomQuestion(question?: string, prompt?: string): string | undefined {
+  const normalizedQuestion = question?.trim();
+  const normalizedPrompt = prompt?.trim();
+  if (normalizedQuestion && normalizedPrompt && normalizedQuestion !== normalizedPrompt) {
+    throw new Error("--question and --prompt were both provided with different values");
+  }
+  return normalizedQuestion || normalizedPrompt || undefined;
+}
+
+async function writeListExport(
+  pathname: string,
+  members: Awaited<ReturnType<typeof showList>>["members"],
+  format: string,
+): Promise<void> {
+  await fs.mkdir(path.dirname(pathname), { recursive: true });
+  if (format === "candidates-jsonl") {
+    await fs.writeFile(pathname, members.map((member) => JSON.stringify(member.company)).join("\n") + (members.length ? "\n" : ""), "utf8");
+    return;
+  }
+  if (format === "jsonl") {
+    await fs.writeFile(pathname, members.map((member) => JSON.stringify(member)).join("\n") + (members.length ? "\n" : ""), "utf8");
+    return;
+  }
+  if (format !== "csv") throw new Error("--format must be one of csv, jsonl, candidates-jsonl");
+
+  const fieldKeys = Array.from(new Set(members.flatMap((member) => Object.keys(member.fields)))).sort();
+  const columns = [
+    "id",
+    "name",
+    "website",
+    "url",
+    "industry",
+    "size",
+    "country",
+    "region",
+    "locality",
+    "linkedin_url",
+    "founded",
+    "membership_source",
+    "membership_reason",
+    "rank",
+    "score",
+    "tags",
+    "tags_json",
+    ...fieldKeys.map((key) => `field_${key}`),
+  ];
+  const lines = [columns.map(escapeCsv).join(",")];
+  for (const member of members) {
+    const row: Record<string, unknown> = {
+      id: member.company.id,
+      name: member.company.name,
+      website: member.company.website,
+      url: member.company.url,
+      industry: member.company.industry,
+      size: member.company.size,
+      country: member.company.country,
+      region: member.company.region,
+      locality: member.company.locality,
+      linkedin_url: member.company.linkedinUrl,
+      founded: member.company.founded,
+      membership_source: member.source,
+      membership_reason: member.reason,
+      rank: member.rank,
+      score: member.score,
+      tags: member.tags.map((tag) => tag.name).join("; "),
+      tags_json: member.tags,
+    };
+    for (const key of fieldKeys) row[`field_${key}`] = member.fields[key];
+    lines.push(columns.map((column) => escapeCsv(formatExportValue(row[column]))).join(","));
+  }
+  await fs.writeFile(pathname, `${lines.join("\n")}\n`, "utf8");
+}
+
+function formatExportValue(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return JSON.stringify(value);
+}
+
+function escapeCsv(value: unknown): string {
+  const text = value === null || value === undefined ? "" : String(value);
+  if (!/[",\n\r]/.test(text)) return text;
+  return `"${text.replace(/"/g, '""')}"`;
 }
 
 function maskConfig(config: FcdxConfig, options: { showSecrets: boolean }): FcdxConfig {

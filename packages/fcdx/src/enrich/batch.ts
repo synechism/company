@@ -19,6 +19,7 @@ export type BatchEnrichmentOptions = {
   timeoutMs: number;
   cacheDir?: string;
   forceRefresh: boolean;
+  customQuestion?: string;
   website?: string[];
   resume: boolean;
   progressEvery: number;
@@ -59,6 +60,7 @@ export async function runBatchEnrichment(options: BatchEnrichmentOptions): Promi
           timeoutMs: options.timeoutMs,
           cacheDir: options.cacheDir,
           forceRefresh: options.forceRefresh,
+          customQuestion: options.customQuestion,
         });
         results.push(result);
         completed += 1;
@@ -148,6 +150,11 @@ async function writeCsv(pathname: string, rows: EnrichedCompany[]): Promise<void
     "linkedin_url",
     "final_url",
     "company_summary",
+    "custom_question",
+    "custom_answer",
+    "custom_confidence",
+    "custom_reason",
+    "custom_evidence",
     "supplies_datacenters_answer",
     "supplies_datacenters_confidence",
     "supplies_datacenters_reason",
@@ -206,6 +213,11 @@ function csvValue(
   if (column in source) return source[column as keyof typeof source];
   if (column === "final_url") return row.agent_metadata.final_url;
   if (column === "company_summary") return enrichment.company_summary;
+  if (column === "custom_question") return enrichment.custom_evaluation?.question;
+  if (column === "custom_answer") return enrichment.custom_evaluation?.answer;
+  if (column === "custom_confidence") return enrichment.custom_evaluation?.confidence;
+  if (column === "custom_reason") return enrichment.custom_evaluation?.reason;
+  if (column === "custom_evidence") return enrichment.custom_evaluation?.evidence?.join("; ");
   if (column === "target_alignment_score") return enrichment.target_alignment?.score;
   if (column === "target_alignment_priority") return enrichment.target_alignment?.priority;
   if (column === "target_alignment_manufacturing_fit") return enrichment.target_alignment?.manufacturing_fit;
@@ -246,13 +258,14 @@ function escapeCsv(value: unknown): string {
 function buildSummary(
   results: EnrichedCompany[],
   elapsedMs: number,
-  opts: { input: string; output: string; concurrency: number; timeoutMs: number },
+  opts: { input: string; output: string; concurrency: number; timeoutMs: number; customQuestion?: string },
 ): unknown {
   const observedMs = results.reduce((sum, result) => sum + result.agent_metadata.elapsed_ms, 0);
   const errors = results.filter((result) => result.agent_metadata.error);
   return {
     input: opts.input,
     output: opts.output,
+    customQuestion: opts.customQuestion,
     companies: results.length,
     errors: errors.length,
     concurrency: opts.concurrency,
@@ -261,6 +274,7 @@ function buildSummary(
     avgMsPerCompanyWallClock: Math.round(elapsedMs / Math.max(1, results.length)),
     avgMsPerCompanyObserved: Math.round(observedMs / Math.max(1, results.length)),
     answerCounts: {
+      ...(opts.customQuestion ? { custom_evaluation: countAnswers(results, "custom_evaluation") } : {}),
       supplies_datacenters: countAnswers(results, "supplies_datacenters"),
       manufacturing_or_factories: countAnswers(results, "manufacturing_or_factories"),
       high_volume_or_high_mix: countAnswers(results, "high_volume_or_high_mix"),

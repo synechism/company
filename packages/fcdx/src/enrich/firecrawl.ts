@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import path from "node:path";
 import fs from "node:fs/promises";
 import type { CandidateCompany, CompanyEnrichment, EnrichedCompany } from "../types.js";
@@ -5,8 +6,8 @@ import { candidateToDatasetRow } from "../data/row.js";
 import { ensureDir, safeName, writeJson, writeText } from "../crawl/artifacts.js";
 import {
   buildEnrichmentPrompt,
+  buildEnrichmentSchema,
   emptyEnrichment,
-  enrichmentSchema,
   TARGET_ALIGNMENT_SCHEMA_VERSION,
 } from "./questions.js";
 
@@ -35,6 +36,7 @@ export type FirecrawlEnrichOptions = {
   timeoutMs: number;
   cacheDir?: string;
   forceRefresh?: boolean;
+  customQuestion?: string;
 };
 
 export async function enrichCompanyWithFirecrawl(
@@ -46,7 +48,7 @@ export async function enrichCompanyWithFirecrawl(
   const cachePayloadPath = firecrawlCachePayloadPath(company, options);
 
   try {
-    let payload = await readCachedFirecrawlPayload(cachePayloadPath, options.forceRefresh);
+    let payload = await readCachedFirecrawlPayload(cachePayloadPath, options);
     if (!payload) {
       payload = await scrapeJson(company.url, company.name, options);
       if (payload.error && company.url.startsWith("https://")) {
@@ -69,7 +71,7 @@ export async function enrichCompanyWithFirecrawl(
     const data = payload.raw.data;
     const metadata = data?.metadata;
     const apiError = payload.raw.error ?? metadata?.error;
-    const enrichment = data?.json ?? emptyEnrichment(apiError ?? `Firecrawl HTTP ${payload.status}`);
+    const enrichment = data?.json ?? emptyEnrichment(apiError ?? `Firecrawl HTTP ${payload.status}`, options.customQuestion);
 
     return {
       source_row: candidateToDatasetRow(company),
@@ -91,7 +93,7 @@ export async function enrichCompanyWithFirecrawl(
     const message = error instanceof Error ? error.message : String(error);
     return {
       source_row: candidateToDatasetRow(company),
-      enrichment: emptyEnrichment(message),
+      enrichment: emptyEnrichment(message, options.customQuestion),
       agent_metadata: {
         backend: "firecrawl_scrape_json",
         url: company.url,
@@ -107,20 +109,21 @@ export function firecrawlCompanyCacheDir(company: CandidateCompany, cacheRoot: s
 }
 
 function firecrawlRawOutputPath(company: CandidateCompany, options: FirecrawlEnrichOptions): string {
-  if (options.cacheDir) return path.join(firecrawlCompanyCacheDir(company, options.cacheDir), "raw.firecrawl.json");
-  return path.join(options.outputDir, "raw", `${safeName(company.id)}.firecrawl.json`);
+  const suffix = enrichmentCacheSuffix(options);
+  if (options.cacheDir) return path.join(firecrawlCompanyCacheDir(company, options.cacheDir), `raw${suffix}.firecrawl.json`);
+  return path.join(options.outputDir, "raw", `${safeName(company.id)}${suffix}.firecrawl.json`);
 }
 
 function firecrawlCachePayloadPath(company: CandidateCompany, options: FirecrawlEnrichOptions): string | undefined {
   if (!options.cacheDir) return undefined;
-  return path.join(firecrawlCompanyCacheDir(company, options.cacheDir), "payload.firecrawl.json");
+  return path.join(firecrawlCompanyCacheDir(company, options.cacheDir), `payload${enrichmentCacheSuffix(options)}.firecrawl.json`);
 }
 
 async function readCachedFirecrawlPayload(
   pathname: string | undefined,
-  forceRefresh = false,
+  options: FirecrawlEnrichOptions,
 ): Promise<{ ok: boolean; status: number; raw: FirecrawlJsonScrapeResponse; error?: string } | undefined> {
-  if (!pathname || forceRefresh) return undefined;
+  if (!pathname || options.forceRefresh) return undefined;
   try {
     const parsed = JSON.parse(await fs.readFile(pathname, "utf8")) as {
       ok?: boolean;
@@ -131,6 +134,9 @@ async function readCachedFirecrawlPayload(
     if (parsed.raw && typeof parsed.status === "number") {
       const alignment = parsed.raw.data?.json?.target_alignment;
       if (parsed.raw.data?.json && alignment?.schema_version !== TARGET_ALIGNMENT_SCHEMA_VERSION) return undefined;
+      if (options.customQuestion && parsed.raw.data?.json?.custom_evaluation?.question !== options.customQuestion) {
+        return undefined;
+      }
       return {
         ok: parsed.ok ?? (parsed.status >= 200 && parsed.status < 300),
         status: parsed.status,
@@ -163,8 +169,8 @@ async function scrapeJson(
         "screenshot",
         {
           type: "json",
-          prompt: buildEnrichmentPrompt(companyName),
-          schema: enrichmentSchema,
+          prompt: buildEnrichmentPrompt(companyName, options.customQuestion),
+          schema: buildEnrichmentSchema({ customQuestion: options.customQuestion }),
         },
       ],
       onlyMainContent: false,
@@ -180,6 +186,12 @@ async function scrapeJson(
     raw,
     error: raw.error,
   };
+}
+
+function enrichmentCacheSuffix(options: FirecrawlEnrichOptions): string {
+  if (!options.customQuestion) return "";
+  const hash = createHash("sha256").update(options.customQuestion).digest("hex").slice(0, 12);
+  return `.custom-${hash}`;
 }
 
 async function writeFirecrawlArtifacts(

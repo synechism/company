@@ -44,6 +44,19 @@ const answerSchema = {
   additionalProperties: false,
 } as const;
 
+const customEvaluationSchema = {
+  type: "object",
+  properties: {
+    question: {
+      type: "string",
+      description: "The custom experiment question that was answered.",
+    },
+    ...answerSchema.properties,
+  },
+  required: ["question", "answer", "confidence", "reason", "evidence"],
+  additionalProperties: false,
+} as const;
+
 const targetAlignmentSchema = {
   type: "object",
   properties: {
@@ -152,9 +165,10 @@ const targetAlignmentSchema = {
   additionalProperties: false,
 } as const;
 
-export const enrichmentSchema = {
-  type: "object",
-  properties: {
+export const enrichmentSchema = buildEnrichmentSchema();
+
+export function buildEnrichmentSchema(options: { customQuestion?: string } = {}): Record<string, unknown> {
+  const properties: Record<string, unknown> = {
     company_summary: {
       type: "string",
       description: "A concise factual summary of what the company does based on the website.",
@@ -169,8 +183,8 @@ export const enrichmentSchema = {
       type: "string",
       description: "Any caveats, missing evidence, or notes about pages that should be checked manually.",
     },
-  },
-  required: [
+  };
+  const required = [
     "company_summary",
     "supplies_datacenters",
     "manufacturing_or_factories",
@@ -179,11 +193,20 @@ export const enrichmentSchema = {
     "turnkey_contract_manufacturer",
     "target_alignment",
     "final_notes",
-  ],
-  additionalProperties: false,
-};
+  ];
+  if (options.customQuestion) {
+    properties.custom_evaluation = customEvaluationSchema;
+    required.splice(1, 0, "custom_evaluation");
+  }
+  return {
+    type: "object",
+    properties,
+    required,
+    additionalProperties: false,
+  };
+}
 
-export function buildEnrichmentPrompt(companyName: string): string {
+export function buildEnrichmentPrompt(companyName: string, customQuestion?: string): string {
   return `
 You are enriching a company dataset for procurement/business-development research.
 Use only evidence available on the company website page being scraped.
@@ -196,6 +219,7 @@ Answer these five questions independently:
 3. ${ENRICHMENT_QUESTIONS.high_volume_or_high_mix}
 4. ${ENRICHMENT_QUESTIONS.large_procurement_team}
 5. ${ENRICHMENT_QUESTIONS.turnkey_contract_manufacturer}
+${customQuestion ? `\nAlso answer custom_evaluation for this experiment-specific question:\n${customQuestion}\n\nFor custom_evaluation, use yes only when the website evidence supports the answer; use no when the website contradicts or clearly does not fit; use unknown when the page does not provide enough evidence. Set custom_evaluation.question exactly to the experiment-specific question above.` : ""}
 
 Then score target_alignment for this specific target profile.
 
@@ -252,7 +276,7 @@ Important rules:
 `.trim();
 }
 
-export function emptyEnrichment(error: string): CompanyEnrichment {
+export function emptyEnrichment(error: string, customQuestion?: string): CompanyEnrichment {
   const answer: EnrichmentAnswer = {
     answer: "unknown",
     confidence: 0,
@@ -273,7 +297,7 @@ export function emptyEnrichment(error: string): CompanyEnrichment {
     negative_evidence: [],
     disqualifiers: [error],
   };
-  return {
+  const enrichment: CompanyEnrichment = {
     company_summary: "",
     supplies_datacenters: answer,
     manufacturing_or_factories: answer,
@@ -283,4 +307,11 @@ export function emptyEnrichment(error: string): CompanyEnrichment {
     target_alignment: targetAlignment,
     final_notes: error,
   };
+  if (customQuestion) {
+    enrichment.custom_evaluation = {
+      question: customQuestion,
+      ...answer,
+    };
+  }
+  return enrichment;
 }
