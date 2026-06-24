@@ -13,7 +13,7 @@
     "deepresearch:prepare": "pnpm --filter @fcdx/deepresearch prepare:input",
     "deepresearch:check": "pnpm --filter @fcdx/deepresearch check",
     "deepresearch:worker": "pnpm --filter @fcdx/deepresearch worker",
-    "fcdx": "pnpm --filter @fcdx/cli fcdx",
+    "fcdx": "node scripts/fcdx.mjs",
     "install-fcdx": "pnpm --filter @fcdx/cli build && node scripts/install-fcdx.mjs"
   },
   "devDependencies": {

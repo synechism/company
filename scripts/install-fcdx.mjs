@@ -20,7 +20,14 @@ if (!fs.existsSync(source)) {
   process.exit(1);
 }
 
-const installDir = await chooseInstallDir();
+const installChoice = await chooseInstallDir();
+if (installChoice.needsManualInstall) {
+  console.error(`No writable non-pnpm directory on PATH was found.`);
+  console.error(`Run this command to install fcdx into /usr/local/bin:`);
+  console.error(`  ${installChoice.manualCommand}`);
+  process.exit(1);
+}
+const installDir = installChoice.dir;
 await fsp.mkdir(installDir, { recursive: true });
 await fsp.mkdir(dataDir, { recursive: true });
 await fsp.mkdir(firecrawlCacheDir, { recursive: true });
@@ -36,6 +43,7 @@ if (process.platform === "win32") {
 }
 
 const config = await writeConfig();
+const pathActive = isOnPath(installDir);
 
 console.log(
   JSON.stringify(
@@ -43,10 +51,12 @@ console.log(
       installed: true,
       bin: target,
       source,
+      pathActive,
       dataDir,
       configPath,
       config,
       nextSteps: [
+        "Run: fcdx --help",
         "Put the PDL CSV or Parquet somewhere on this machine.",
         `Run: fcdx config init --dataset /path/to/free_company_dataset.csv --db ${dbPath} --firecrawl-cache-dir ${firecrawlCacheDir} --force`,
         `Or:  fcdx config init --parquet /path/to/free_company_dataset.parquet --db ${dbPath} --firecrawl-cache-dir ${firecrawlCacheDir} --force`,
@@ -83,19 +93,40 @@ async function readExistingConfig() {
 async function chooseInstallDir() {
   const pathDirs = (process.env.PATH ?? "").split(path.delimiter).filter(Boolean);
   const nodeBinDir = path.dirname(process.execPath);
-  if (pathDirs.includes(nodeBinDir) && await isWritableDirectory(nodeBinDir)) return nodeBinDir;
+  const explicitDir = process.env.FCDX_INSTALL_BIN_DIR ? path.resolve(process.env.FCDX_INSTALL_BIN_DIR) : undefined;
+  if (explicitDir) return { dir: explicitDir };
+
+  const pnpmHome = process.env.PNPM_HOME ? path.resolve(process.env.PNPM_HOME) : undefined;
+  if (pnpmHome && isOnPath(pnpmHome) && !isPackageManagerBinDir(pnpmHome) && await isWritableDirectory(pnpmHome)) {
+    return { dir: pnpmHome };
+  }
+
+  const userBin = path.join(os.homedir(), ".local", "bin");
+  if (isOnPath(userBin) && await isWritableOrCreatableDirectory(userBin)) return { dir: userBin };
+
+  if (pathDirs.includes(nodeBinDir) && !isPackageManagerBinDir(nodeBinDir) && await isWritableDirectory(nodeBinDir)) {
+    return { dir: nodeBinDir };
+  }
 
   for (const dir of pathDirs) {
     if (isPackageManagerBinDir(dir)) continue;
     if (isEphemeralPathDir(dir)) continue;
-    if (await isWritableDirectory(dir)) return dir;
+    if (await isWritableDirectory(dir)) return { dir };
   }
 
-  const fallback = path.join(os.homedir(), ".local", "bin");
-  if (!pathDirs.includes(fallback)) {
-    console.error(`No writable PATH directory found. Installing to ${fallback}; add it to PATH if fcdx is not found.`);
-  }
-  return fallback;
+  const target = "/usr/local/bin/fcdx";
+  return {
+    needsManualInstall: true,
+    manualCommand: `sudo ln -sf "${source}" "${target}" && sudo chmod 755 "${source}"`,
+  };
+}
+
+function isOnPath(dir) {
+  const resolved = path.resolve(dir);
+  return (process.env.PATH ?? "")
+    .split(path.delimiter)
+    .filter(Boolean)
+    .some((entry) => path.resolve(entry) === resolved);
 }
 
 function isEphemeralPathDir(dir) {
@@ -111,6 +142,10 @@ function isPackageManagerBinDir(dir) {
   return (
     normalized.includes(`${path.sep}node_modules${path.sep}.bin`) ||
     normalized.includes(`${path.sep}.pnpm${path.sep}`) ||
+    normalized.includes(`${path.sep}pnpm${path.sep}store${path.sep}`) ||
+    normalized.includes(`${path.sep}pnpm${path.sep}global${path.sep}`) ||
+    normalized.includes(`${path.sep}store${path.sep}v`) ||
+    normalized.includes(`${path.sep}links${path.sep}`) ||
     normalized.endsWith(`${path.sep}node-gyp-bin`) ||
     normalized.includes(`${path.sep}node_modules${path.sep}pnpm${path.sep}`)
   );
@@ -122,6 +157,15 @@ async function isWritableDirectory(dir) {
     if (!stats.isDirectory()) return false;
     await fsp.access(dir, fs.constants.W_OK);
     return true;
+  } catch {
+    return false;
+  }
+}
+
+async function isWritableOrCreatableDirectory(dir) {
+  try {
+    await fsp.mkdir(dir, { recursive: true });
+    return isWritableDirectory(dir);
   } catch {
     return false;
   }

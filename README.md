@@ -32,6 +32,9 @@ pnpm install-fcdx
 writable directory on `PATH`, creates an FCD-X data home, and writes config.
 It does not bundle or download the dataset; point the CLI at a CSV or Parquet
 that you have locally, then materialize DuckDB with `fcdx db init`.
+The installer refuses pnpm-internal temporary/store paths. If no writable real
+`PATH` directory exists, it prints a one-line `sudo ln -sf ... /usr/local/bin/fcdx`
+command instead of silently installing somewhere your shell cannot find.
 
 Installer paths:
 
@@ -44,6 +47,13 @@ Verify the binary is available:
 
 ```bash
 fcdx --help
+```
+
+If that says `command not found`, rerun the installer and follow the printed
+manual install command:
+
+```bash
+pnpm install-fcdx
 ```
 
 Then choose one data-source setup.
