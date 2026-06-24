@@ -310,7 +310,8 @@ FIRECRAWL_API_KEY=... fcdx enrich file \
   --summary output/enriched/water-infra-summary.json \
   --csv-output output/enriched/water-infra.csv \
   --question "Does this company manufacture water valves or waterworks flow-control valves?" \
-  --concurrency 10 \
+  --concurrency 40 \
+  --timeout-ms 45000 \
   --resume
 ```
 
@@ -321,7 +322,8 @@ fcdx enrich list \
   --list water-infra \
   --field water_valve_enrichment \
   --question "Does this company manufacture water valves or waterworks flow-control valves?" \
-  --concurrency 10
+  --concurrency 40 \
+  --timeout-ms 45000
 
 fcdx list show --list water-infra --limit 10
 ```
@@ -330,6 +332,12 @@ fcdx list show --list water-infra --limit 10
 prompt-specific answer in list-local DuckDB fields. Overlapping lists can have
 different enrichment columns, e.g. `thermal_enrichment` on one list and
 `water_valve_enrichment` on another, without mutating the source company table.
+The default enrichment path is optimized for large batches: one Firecrawl scrape
+per company, markdown plus JSON extraction only, main-content mode, and no HTML
+or screenshots. Use `--include-html`, `--include-screenshot`, or `--full-page`
+only when you actually need those heavier artifacts. `enrich list` also skips
+companies that already have the target `--field`; pass `--no-skip-existing` to
+force a fresh pass over the full list.
 
 The enriched JSONL preserves the source company row and appends answers,
 confidence, reasons, and evidence for:
@@ -430,6 +438,8 @@ fcdx linkedin people --list water-valve-qualified --role "procurement supply cha
 
 After the agent selects a contact from `linkedin people`, use Hunter to find and
 verify the email. Verified leads are stored as a list-local `leads` array field.
+If LinkedIn matching is thin, use Hunter Domain Search to pull multiple domain
+emails and include accept-all addresses in the stored lead set.
 
 ```bash
 fcdx lead find-email \
@@ -439,6 +449,17 @@ fcdx lead find-email \
   --last-name Doe \
   --domain example.com \
   --role "VP Supply Chain"
+
+fcdx lead domain-search \
+  --list water-valve-qualified \
+  --company-id pdl_company_id_here \
+  --allow-accept-all \
+  --max-write 10
+
+fcdx list export \
+  --list water-valve-qualified \
+  --format lead-summary \
+  --output output/lists/water-valve-qualified-leads.csv
 
 fcdx list show --list water-valve-qualified --limit 10
 ```

@@ -36,6 +36,38 @@ export type HunterEmailFinderResponse = {
   meta?: unknown;
 };
 
+export type HunterDomainSearchEmail = {
+  value?: string;
+  type?: string;
+  confidence?: number;
+  sources?: HunterSource[];
+  first_name?: string;
+  last_name?: string;
+  position?: string | null;
+  seniority?: string | null;
+  department?: string | null;
+  linkedin?: string | null;
+  twitter?: string | null;
+  phone_number?: string | null;
+  verification?: {
+    date?: string;
+    status?: "valid" | "accept_all" | "unknown" | string;
+  };
+};
+
+export type HunterDomainSearchData = {
+  domain?: string;
+  organization?: string;
+  accept_all?: boolean;
+  pattern?: string | null;
+  emails?: HunterDomainSearchEmail[];
+};
+
+export type HunterDomainSearchResponse = {
+  data?: HunterDomainSearchData;
+  meta?: unknown;
+};
+
 export type HunterEmailVerifierData = {
   status?: "valid" | "invalid" | "accept_all" | "webmail" | "disposable" | "unknown" | string;
   result?: "deliverable" | "undeliverable" | "risky" | string;
@@ -93,6 +125,26 @@ export class HunterClient {
       last_name: options.lastName,
       full_name: options.fullName,
       max_duration: options.maxDuration,
+    });
+  }
+
+  async domainSearch(options: {
+    domain?: string;
+    company?: string;
+    limit?: number;
+    offset?: number;
+    type?: "personal" | "generic";
+    seniority?: string;
+    department?: string;
+  }): Promise<HunterDomainSearchResponse> {
+    return this.request<HunterDomainSearchResponse>("/domain-search", {
+      domain: options.domain,
+      company: options.company,
+      limit: options.limit,
+      offset: options.offset,
+      type: options.type,
+      seniority: options.seniority,
+      department: options.department,
     });
   }
 

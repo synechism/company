@@ -37,6 +37,7 @@ export async function connectFcdxDb(dbPath = DEFAULT_DB_PATH, options: { readOnl
 
 export async function initializeFcdxDb(options: DbInitOptions): Promise<Record<string, unknown>> {
   const started = Date.now();
+  await validateDatasetSource(options);
   const { instance, connection } = await connectFcdxDb(options.dbPath);
   try {
     if (options.replace) {
@@ -61,6 +62,72 @@ export async function initializeFcdxDb(options: DbInitOptions): Promise<Record<s
     connection.closeSync();
     instance.closeSync();
   }
+}
+
+async function validateDatasetSource(options: DbInitOptions): Promise<void> {
+  const stat = await fs.stat(options.sourcePath);
+  if (!stat.isFile()) throw new Error(`Dataset source is not a file: ${options.sourcePath}`);
+  if (stat.size === 0) throw new Error(`Dataset source is empty: ${options.sourcePath}`);
+  if (options.sourceType === "csv") return;
+
+  if (stat.size < 8) {
+    throw new Error(invalidParquetMessage(options.sourcePath, "file is too small to be a Parquet file"));
+  }
+
+  const handle = await fs.open(options.sourcePath, "r");
+  try {
+    const first4 = Buffer.alloc(4);
+    const last4 = Buffer.alloc(4);
+    await handle.read(first4, 0, 4, 0);
+    await handle.read(last4, 0, 4, stat.size - 4);
+    if (first4.toString("utf8") === "PAR1" && last4.toString("utf8") === "PAR1") return;
+
+    const previewBuffer = Buffer.alloc(Math.min(512, stat.size));
+    const { bytesRead } = await handle.read(previewBuffer, 0, previewBuffer.length, 0);
+    const preview = previewBuffer.subarray(0, bytesRead).toString("utf8");
+    throw new Error(invalidParquetMessage(options.sourcePath, classifyInvalidParquet(preview)));
+  } finally {
+    await handle.close();
+  }
+}
+
+function classifyInvalidParquet(preview: string): string {
+  const trimmed = preview.trimStart().toLowerCase();
+  if (trimmed.startsWith("version https://git-lfs.github.com/spec")) {
+    return "this looks like a Git LFS pointer, not the actual Parquet data; run git lfs pull or download the real file";
+  }
+  if (trimmed.startsWith("<!doctype html") || trimmed.startsWith("<html")) {
+    return "this looks like an HTML page, not Parquet; re-download the raw data file";
+  }
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    return "this looks like JSON, not Parquet";
+  }
+  if (looksLikeCsv(preview)) {
+    return "this looks like CSV/text, not Parquet; configure it with --dataset or run fcdx db init --csv";
+  }
+  return "missing Parquet magic bytes; the file is corrupt, incomplete, or not actually Parquet";
+}
+
+function looksLikeCsv(preview: string): boolean {
+  const firstLine = preview.split(/\r?\n/, 1)[0]?.toLowerCase() ?? "";
+  return firstLine.includes(",") && ["country", "founded", "id", "industry", "linkedin_url", "website"].some((field) => firstLine.includes(field));
+}
+
+function invalidParquetMessage(sourcePath: string, reason: string): string {
+  return [
+    `Invalid Parquet file: ${sourcePath}`,
+    `Reason: ${reason}.`,
+    "",
+    "Quick checks:",
+    `  file "${sourcePath}"`,
+    `  head -c 200 "${sourcePath}"`,
+    "",
+    "If this is the PDL CSV, use:",
+    `  fcdx config init --dataset "${sourcePath}" --force`,
+    "  fcdx db init --replace",
+    "",
+    "If you intended Parquet, re-copy or re-download the actual .parquet file.",
+  ].join("\n");
 }
 
 export async function exportCompaniesParquet(options: {

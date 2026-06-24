@@ -20,6 +20,9 @@ export type BatchEnrichmentOptions = {
   cacheDir?: string;
   forceRefresh: boolean;
   customQuestion?: string;
+  fullPage?: boolean;
+  includeHtml?: boolean;
+  includeScreenshot?: boolean;
   website?: string[];
   resume: boolean;
   progressEvery: number;
@@ -61,6 +64,9 @@ export async function runBatchEnrichment(options: BatchEnrichmentOptions): Promi
           cacheDir: options.cacheDir,
           forceRefresh: options.forceRefresh,
           customQuestion: options.customQuestion,
+          fullPage: options.fullPage,
+          includeHtml: options.includeHtml,
+          includeScreenshot: options.includeScreenshot,
         });
         results.push(result);
         completed += 1;
