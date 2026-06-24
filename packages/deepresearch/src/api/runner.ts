@@ -1,10 +1,10 @@
 import { spawn } from "node:child_process";
 import { createWriteStream } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { access, copyFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Job } from "bullmq";
-import { loadDeepResearchApiConfig } from "./config.js";
+import { loadDeepResearchApiConfig, type DeepResearchApiConfig } from "./config.js";
 import type { DeepResearchJobData, DeepResearchJobResult, DeepResearchRunner } from "./types.js";
 
 const sourceDir = path.dirname(fileURLToPath(import.meta.url));
@@ -19,7 +19,9 @@ export async function runDeepResearchJob(
   const promptPath = path.join(artifactDir, "prompt.md");
   const reportPath = path.join(artifactDir, "report.txt");
   const runJsonPath = path.join(artifactDir, "run.json");
-  const runner = job.data.options?.runner ?? config.defaultRunner;
+  const options = job.data.options ?? {};
+  const runner = options.runner ?? config.defaultRunner;
+  const cache = resolveDeepResearchCache(job, config);
 
   await mkdir(artifactDir, { recursive: true });
   await writeFile(promptPath, job.data.prompt, "utf8");
@@ -29,7 +31,37 @@ export async function runDeepResearchJob(
     "utf8",
   );
 
-  await job.updateProgress({ stage: "running", runner, artifact_dir: artifactDir });
+  if (cache && !options.forceRefresh && (await fileExists(cache.reportPath))) {
+    await job.updateProgress({ stage: "cache_hit", runner, artifact_dir: artifactDir, cache_dir: cache.dir });
+    await copyFile(cache.reportPath, reportPath);
+    await writeRunJson(runJsonPath, {
+      runner,
+      job_id: job.id,
+      cache_hit: true,
+      cache_dir: cache.dir,
+      cache_report_path: cache.reportPath,
+      cached_run_json_path: (await fileExists(cache.runJsonPath)) ? cache.runJsonPath : undefined,
+      output_path: reportPath,
+    });
+    const completedAt = new Date();
+    const result = buildJobResult({
+      job,
+      runner,
+      artifactDir,
+      promptPath,
+      reportPath,
+      runJsonPath,
+      startedAt,
+      completedAt,
+      cacheHit: true,
+      cacheDir: cache.dir,
+      cacheReportPath: cache.reportPath,
+    });
+    await job.updateProgress({ stage: "completed", cache_hit: true, artifact_dir: artifactDir, report_path: reportPath });
+    return result;
+  }
+
+  await job.updateProgress({ stage: "running", runner, artifact_dir: artifactDir, cache_dir: cache?.dir });
 
   if (runner === "stub") {
     await runStub(job, reportPath, runJsonPath);
@@ -44,19 +76,23 @@ export async function runDeepResearchJob(
   }
 
   const completedAt = new Date();
-  const result: DeepResearchJobResult = {
-    job_id: job.id ?? "",
+  if (cache) {
+    await persistDeepResearchCache(job, cache, { reportPath, runJsonPath, promptPath, runner, startedAt, completedAt });
+  }
+  const result = buildJobResult({
+    job,
     runner,
-    status: "completed",
-    report_path: reportPath,
-    prompt_path: promptPath,
-    run_json_path: runJsonPath,
-    artifact_dir: artifactDir,
-    elapsed_ms: completedAt.getTime() - startedAt.getTime(),
-    started_at: startedAt.toISOString(),
-    completed_at: completedAt.toISOString(),
-  };
-  await job.updateProgress({ stage: "completed", artifact_dir: artifactDir, report_path: reportPath });
+    artifactDir,
+    promptPath,
+    reportPath,
+    runJsonPath,
+    startedAt,
+    completedAt,
+    cacheHit: false,
+    cacheDir: cache?.dir,
+    cacheReportPath: cache?.reportPath,
+  });
+  await job.updateProgress({ stage: "completed", cache_hit: false, artifact_dir: artifactDir, report_path: reportPath, cache_dir: cache?.dir });
   return result;
 }
 
@@ -88,6 +124,119 @@ async function runStub(
     )}\n`,
     "utf8",
   );
+}
+
+function buildJobResult(input: {
+  job: Job<DeepResearchJobData, DeepResearchJobResult>;
+  runner: DeepResearchRunner;
+  artifactDir: string;
+  promptPath: string;
+  reportPath: string;
+  runJsonPath: string;
+  startedAt: Date;
+  completedAt: Date;
+  cacheHit: boolean;
+  cacheDir?: string;
+  cacheReportPath?: string;
+}): DeepResearchJobResult {
+  return {
+    job_id: input.job.id ?? "",
+    runner: input.runner,
+    status: "completed",
+    report_path: input.reportPath,
+    prompt_path: input.promptPath,
+    run_json_path: input.runJsonPath,
+    artifact_dir: input.artifactDir,
+    cache_hit: input.cacheHit,
+    cache_dir: input.cacheDir,
+    cache_report_path: input.cacheReportPath,
+    elapsed_ms: input.completedAt.getTime() - input.startedAt.getTime(),
+    started_at: input.startedAt.toISOString(),
+    completed_at: input.completedAt.toISOString(),
+  };
+}
+
+type DeepResearchCachePaths = {
+  dir: string;
+  reportPath: string;
+  runJsonPath: string;
+  metadataPath: string;
+};
+
+function resolveDeepResearchCache(
+  job: Job<DeepResearchJobData, DeepResearchJobResult>,
+  config: DeepResearchApiConfig,
+): DeepResearchCachePaths | undefined {
+  const metadata = job.data.metadata ?? {};
+  const explicitDir = typeof metadata.deepresearch_cache_dir === "string" ? metadata.deepresearch_cache_dir : undefined;
+  const companyId = typeof metadata.company_id === "string" ? metadata.company_id : undefined;
+  const dir = explicitDir || (companyId ? path.join(config.companyCacheRoot, safeName(companyId), "deepresearch") : undefined);
+  if (!dir) return undefined;
+  return {
+    dir: path.resolve(dir),
+    reportPath: path.resolve(dir, "report.txt"),
+    runJsonPath: path.resolve(dir, "run.json"),
+    metadataPath: path.resolve(dir, "cache.json"),
+  };
+}
+
+async function persistDeepResearchCache(
+  job: Job<DeepResearchJobData, DeepResearchJobResult>,
+  cache: DeepResearchCachePaths,
+  input: {
+    reportPath: string;
+    runJsonPath: string;
+    promptPath: string;
+    runner: DeepResearchRunner;
+    startedAt: Date;
+    completedAt: Date;
+  },
+): Promise<void> {
+  await mkdir(cache.dir, { recursive: true });
+  await copyFile(input.reportPath, cache.reportPath);
+  if (await fileExists(input.runJsonPath)) await copyFile(input.runJsonPath, cache.runJsonPath);
+  await writeFile(
+    cache.metadataPath,
+    `${JSON.stringify(
+      {
+        cached_at: new Date().toISOString(),
+        company_id: job.data.metadata?.company_id,
+        company_name: job.data.metadata?.company_name,
+        website: job.data.metadata?.website,
+        source_job_id: job.id,
+        runner: input.runner,
+        prompt_path: input.promptPath,
+        report_path: cache.reportPath,
+        run_json_path: cache.runJsonPath,
+        started_at: input.startedAt.toISOString(),
+        completed_at: input.completedAt.toISOString(),
+      },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+}
+
+async function fileExists(pathname: string): Promise<boolean> {
+  try {
+    await access(pathname);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function writeRunJson(pathname: string, value: Record<string, unknown>): Promise<void> {
+  await writeFile(pathname, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+}
+
+function safeName(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 120);
 }
 
 async function runOpenDeepResearch(

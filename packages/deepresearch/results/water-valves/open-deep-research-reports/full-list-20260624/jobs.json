@@ -1,0 +1,111 @@
+{
+  "list": "water-valves-shortlist-leads",
+  "jobs": 15,
+  "submitted": [
+    {
+      "company_id": "WtNHh7O2sKZ0aqvet9yonQJmyJol",
+      "company_name": "\\\"apollo\\\" flow controls, manufactured by conbraco industries",
+      "job_id": "f2d0fe8f-355e-4bc5-9541-bdc8c4ef722f",
+      "status_url": "http://127.0.0.1:8787/jobs/f2d0fe8f-355e-4bc5-9541-bdc8c4ef722f",
+      "report_url": "http://127.0.0.1:8787/jobs/f2d0fe8f-355e-4bc5-9541-bdc8c4ef722f/report.txt"
+    },
+    {
+      "company_id": "mQjRE7j2TC5bW90Jwiy08wckzZAG",
+      "company_name": "a.y. mcdonald mfg. co.",
+      "job_id": "e34119ba-065c-4904-9621-55f0a190917a",
+      "status_url": "http://127.0.0.1:8787/jobs/e34119ba-065c-4904-9621-55f0a190917a",
+      "report_url": "http://127.0.0.1:8787/jobs/e34119ba-065c-4904-9621-55f0a190917a/report.txt"
+    },
+    {
+      "company_id": "egjXuCNqo8tWeqbj2l17mAPvKCIF",
+      "company_name": "aquestia usa",
+      "job_id": "6a7358f1-61e6-4a53-8bf4-2fc14fe7a2e7",
+      "status_url": "http://127.0.0.1:8787/jobs/6a7358f1-61e6-4a53-8bf4-2fc14fe7a2e7",
+      "report_url": "http://127.0.0.1:8787/jobs/6a7358f1-61e6-4a53-8bf4-2fc14fe7a2e7/report.txt"
+    },
+    {
+      "company_id": "eA75EawePzbDZHrzJOzmDgXyBpR8",
+      "company_name": "cla-val",
+      "job_id": "ae8c5b97-4f47-47ce-b9ea-17d203ea3d71",
+      "status_url": "http://127.0.0.1:8787/jobs/ae8c5b97-4f47-47ce-b9ea-17d203ea3d71",
+      "report_url": "http://127.0.0.1:8787/jobs/ae8c5b97-4f47-47ce-b9ea-17d203ea3d71/report.txt"
+    },
+    {
+      "company_id": "ERQnyRuUG54mlpD7iqxxkQbi8XuT",
+      "company_name": "dezurik",
+      "job_id": "11625972-4e64-41f6-9773-5ccb129159eb",
+      "status_url": "http://127.0.0.1:8787/jobs/11625972-4e64-41f6-9773-5ccb129159eb",
+      "report_url": "http://127.0.0.1:8787/jobs/11625972-4e64-41f6-9773-5ccb129159eb/report.txt"
+    },
+    {
+      "company_id": "iRzaIU26Hdl9CMCtNmKfKQ6k2u8h",
+      "company_name": "dorot control valves",
+      "job_id": "4d5fc1a3-0dbe-4901-9a4e-5c33a4e2ae06",
+      "status_url": "http://127.0.0.1:8787/jobs/4d5fc1a3-0dbe-4901-9a4e-5c33a4e2ae06",
+      "report_url": "http://127.0.0.1:8787/jobs/4d5fc1a3-0dbe-4901-9a4e-5c33a4e2ae06/report.txt"
+    },
+    {
+      "company_id": "CqbnigigXCdI4rKXgcyWxAUifThO",
+      "company_name": "henry pratt company",
+      "job_id": "bdc90ceb-b33b-4705-991a-81d6ba51b305",
+      "status_url": "http://127.0.0.1:8787/jobs/bdc90ceb-b33b-4705-991a-81d6ba51b305",
+      "report_url": "http://127.0.0.1:8787/jobs/bdc90ceb-b33b-4705-991a-81d6ba51b305/report.txt"
+    },
+    {
+      "company_id": "C7TpZNLaDQOduDAGTy6vJwZW0hUF",
+      "company_name": "itt engineered valves",
+      "job_id": "4163de73-24d7-432d-b363-7dfd31bd3c96",
+      "status_url": "http://127.0.0.1:8787/jobs/4163de73-24d7-432d-b363-7dfd31bd3c96",
+      "report_url": "http://127.0.0.1:8787/jobs/4163de73-24d7-432d-b363-7dfd31bd3c96/report.txt"
+    },
+    {
+      "company_id": "BFKJ7LbOsinzJZChqw4BRAWC1s5W",
+      "company_name": "kennedy valve company",
+      "job_id": "5b2b8142-50cb-40cd-b215-e6fe093295ed",
+      "status_url": "http://127.0.0.1:8787/jobs/5b2b8142-50cb-40cd-b215-e6fe093295ed",
+      "report_url": "http://127.0.0.1:8787/jobs/5b2b8142-50cb-40cd-b215-e6fe093295ed/report.txt"
+    },
+    {
+      "company_id": "UgmXF4rA9Nnh8BoaGeKGhgyN6kH8",
+      "company_name": "m&h valve company",
+      "job_id": "0a038d4a-163b-4ee2-bf1e-33aa95247b9c",
+      "status_url": "http://127.0.0.1:8787/jobs/0a038d4a-163b-4ee2-bf1e-33aa95247b9c",
+      "report_url": "http://127.0.0.1:8787/jobs/0a038d4a-163b-4ee2-bf1e-33aa95247b9c/report.txt"
+    },
+    {
+      "company_id": "UJjToICZmDiUsaEdY4nOQgbn5bxY",
+      "company_name": "milwaukee valve company, llc.",
+      "job_id": "c3de1834-d47d-402c-8663-8be46de0e473",
+      "status_url": "http://127.0.0.1:8787/jobs/c3de1834-d47d-402c-8663-8be46de0e473",
+      "report_url": "http://127.0.0.1:8787/jobs/c3de1834-d47d-402c-8663-8be46de0e473/report.txt"
+    },
+    {
+      "company_id": "DeBEaqKrRhSdnewQONDJpACVsmxt",
+      "company_name": "mueller water products",
+      "job_id": "a9134181-4311-476e-8663-0f93834b36d5",
+      "status_url": "http://127.0.0.1:8787/jobs/a9134181-4311-476e-8663-0f93834b36d5",
+      "report_url": "http://127.0.0.1:8787/jobs/a9134181-4311-476e-8663-0f93834b36d5/report.txt"
+    },
+    {
+      "company_id": "WGnCJahQhT6Im1DE2z6ijQ2ac6QH",
+      "company_name": "nibco inc.",
+      "job_id": "b6c442b5-3d34-434f-9018-a114328585eb",
+      "status_url": "http://127.0.0.1:8787/jobs/b6c442b5-3d34-434f-9018-a114328585eb",
+      "report_url": "http://127.0.0.1:8787/jobs/b6c442b5-3d34-434f-9018-a114328585eb/report.txt"
+    },
+    {
+      "company_id": "AmTEkWVLVVzhna3YqpAX0QgA58wj",
+      "company_name": "watts water technologies",
+      "job_id": "59b69b77-06e7-43c1-971c-cb24fc315418",
+      "status_url": "http://127.0.0.1:8787/jobs/59b69b77-06e7-43c1-971c-cb24fc315418",
+      "report_url": "http://127.0.0.1:8787/jobs/59b69b77-06e7-43c1-971c-cb24fc315418/report.txt"
+    },
+    {
+      "company_id": "lqAC38dS20I3mojEd90LvQwNmwsb",
+      "company_name": "zurn elkay water solutions",
+      "job_id": "229e0dce-b7b1-4c49-a862-32a457f9e0df",
+      "status_url": "http://127.0.0.1:8787/jobs/229e0dce-b7b1-4c49-a862-32a457f9e0df",
+      "report_url": "http://127.0.0.1:8787/jobs/229e0dce-b7b1-4c49-a862-32a457f9e0df/report.txt"
+    }
+  ]
+}

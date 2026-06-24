@@ -14,6 +14,7 @@ export type DeepResearchJobOptions = {
   summarizationModelMaxTokens?: number;
   compressionModelMaxTokens?: number;
   finalReportModelMaxTokens?: number;
+  forceRefresh?: boolean;
 };
 
 export type DeepResearchJobData = {
@@ -30,6 +31,9 @@ export type DeepResearchJobResult = {
   prompt_path: string;
   run_json_path?: string;
   artifact_dir: string;
+  cache_hit?: boolean;
+  cache_dir?: string;
+  cache_report_path?: string;
   elapsed_ms: number;
   started_at: string;
   completed_at: string;

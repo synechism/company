@@ -19,6 +19,8 @@ Environment:
   DEEPRESEARCH_API_PORT      Bind port, default 8787
   DEEPRESEARCH_PUBLIC_URL    Optional public URL used in returned job links
   DEEPRESEARCH_QUEUE         BullMQ queue name, default fcdx-deepresearch
+  DEEPRESEARCH_COMPANY_CACHE_ROOT
+                             Per-company cache root, default output/cache/firecrawl
 `);
   process.exit(0);
 }

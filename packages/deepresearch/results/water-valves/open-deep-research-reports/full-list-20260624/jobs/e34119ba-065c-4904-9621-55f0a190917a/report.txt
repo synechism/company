@@ -1,0 +1,312 @@
+```json
+{
+  "company": "A.Y. McDonald Mfg. Co.",
+  "fit_score": 5,
+  "fit_reason": "A.Y. McDonald is a strong fit for a procurement automation pitch. The company operates three major manufacturing plants plus a new brass foundry and a new manufacturing facility both under construction, multiple subsidiaries (Val-Matic, Cambridge Brass), and a complex supplier base for brass castings, machining, and engineered components. The 2025-2026 period sees two major greenfield construction projects ($340M+ combined), new product launches, and likely significant procurement complexity as they ramp up new facilities and manage transitions from legacy plants. The company has a dedicated procurement/sourcing team that includes a Procurement Specialist, Purchasing Manager, and Director of Strategic Sourcing, indicating structured procurement operations that could benefit from automation.",
+  "manufacturing_profile": "A.Y. McDonald is a vertically integrated manufacturer of waterworks brass fittings, plumbing valves, fire hydrants, natural gas products, and engineered flow-control valves. The company operates its own brass foundry (Dubuque, IA and soon Dickeyville, WI) with in-house casting, machining, assembly, and finishing. Product lines span standard catalog items (gate valves, check valves, ball valves, corporation stops, curb stops, meter setters, Cambridge couplings, gas risers) as well as highly engineered products through Val-Matic (tilted disc check valves, eccentric plug valves, AWWA butterfly valves, air valves, surge control valves). Production is high-mix/low-volume given the breadth of SKUs (hundreds of configurations by size, material, connection type) for water utilities, plumbing contractors, and natural gas distributors. The company holds certifications for NSF/ANSI 61, NSF/ANSI 372, AWWA C800, and Val-Matic is ISO 9001:2015 certified. Products are Buy America compliant.",
+  "recent_triggers": [
+    {
+      "trigger": "New Brass Foundry Construction - Dickeyville, WI ($340M investment)",
+      "date": "2023-08 to 2026",
+      "why_it_matters": "A 350,000 sq ft brass foundry with advanced molding and melt systems represents massive procurement complexity: new supplier qualification, construction procurement, foundry equipment sourcing, raw material contracts for copper alloys, and potential supplier consolidation or expansion as the new facility ramps up.",
+      "source_url": "https://delta3eng.biz/company-awarded-5-85-million-in-tax-credits-for-sw-wisconsin-foundry-project/"
+    },
+    {
+      "trigger": "New Manufacturing Facility Construction - Bristol, TN (340,000 sq ft)",
+      "date": "2025-2026",
+      "why_it_matters": "Relocation from Elizabethton, TN to a new, larger facility approximately 15 miles away. Involves equipment procurement, supply chain reconfiguration for nearly 300 employees' operations, and likely new supplier relationships for the expanded production capacity.",
+      "source_url": "https://bjournal.com/a-y-mcdonald-plans-bristol-relocation/"
+    },
+    {
+      "trigger": "New Product Launch: The Commander with Streamline Technology (meter valve)",
+      "date": "2026-06-15",
+      "why_it_matters": "New product introduction requires sourcing of new components, supplier qualification, and potentially new raw materials or engineered parts, increasing procurement complexity.",
+      "source_url": "https://www.aymcdonald.com/en/news/2025/January/new-inline-bypass-size--406"
+    },
+    {
+      "trigger": "New Product Launch: CoreCoat+ Enhanced Corrosion Protection for Chicago Fittings Risers",
+      "date": "2026-06-05",
+      "why_it_matters": "New coating technology for gas distribution risers introduces new supplier relationships for coating materials and expanded procurement specifications.",
+      "source_url": "https://www.aymcdonald.com/en/news/2025/January/new-inline-bypass-size--406"
+    },
+    {
+      "trigger": "New Product Launch: Handy-Loc Series Compression Nut",
+      "date": "2026-05-18",
+      "why_it_matters": "Simplified water service connection product adds to the SKU base and requires sourcing of new brass components and packaging materials.",
+      "source_url": "https://www.aymcdonald.com/en/news/2025/January/new-inline-bypass-size--406"
+    },
+    {
+      "trigger": "Plumbing Price Increase Effective July 7, 2026",
+      "date": "2026-07-07",
+      "why_it_matters": "Price increases indicate commodity cost fluctuations and supply chain pressure, factors that make procurement efficiency and cost management priorities.",
+      "source_url": "https://www.aymcdonald.com/en/news"
+    },
+    {
+      "trigger": "AWWA Career Profile Lists Company as Active Employer - Indicates Hiring Demand",
+      "date": "2026",
+      "why_it_matters": "Active recruitment for water utility industry talent suggests growth mode, likely including procurement/supply chain roles as new facilities come online.",
+      "source_url": "https://careercenter.awwa.org/profile/ay-mcdonald-mfg-co/898231/"
+    },
+    {
+      "trigger": "Val-Matic Acquisition (2020) - Continued Integration",
+      "date": "2020-12-31 to present",
+      "why_it_matters": "Integration of Val-Matic's 14 valve product lines and two Illinois facilities adds procurement complexity across combined operations; synergy realization still ongoing in 2025-2026.",
+      "source_url": "https://www.aymcdonald.com/en/content/our-locations"
+    }
+  ],
+  "recommended_contact": {
+    "name": "Leanne Teasdale",
+    "title": "Procurement Specialist",
+    "email": "lteasdale@aymcdonald.com",
+    "linkedin_url": "https://www.linkedin.com/in/leanne-teasdale-40014112",
+    "why_this_person": "Leanne Teasdale is a verified Procurement Specialist at A.Y. McDonald Mfg. Co. with a confirmed, deliverable email address (lteasdale@aymcdonald.com, verified June 23, 2026). She is the most directly accessible individual in a procurement role. However, for a more strategic conversation, the Director of Strategic Sourcing (A.Y. McDonald Industries) or the VP of Production Planning & Logistics (B.O.) would be better suited as decision-makers. The recommended strategy: use Leanne as an entry point to identify and warm the Director of Strategic Sourcing or VP of Operations."
+  },
+  "org_chart": [
+    {
+      "name": "Rob McDonald",
+      "title": "Chief Executive Officer",
+      "function": "executive",
+      "reports_to": "Board of Directors (A.Y. McDonald Industries, Inc.)",
+      "relationship_basis": "Directly sourced from company website/fifth-generation family member",
+      "source_url": "https://www.aymcdonald.com/en/content/about-us",
+      "confidence": "high"
+    },
+    {
+      "name": "Chad Huntington",
+      "title": "President",
+      "function": "executive",
+      "reports_to": "Rob McDonald, CEO",
+      "relationship_basis": "Directly sourced from company website",
+      "source_url": "https://www.aymcdonald.com/en/content/about-us",
+      "confidence": "high"
+    },
+    {
+      "name": "Scott Knapp",
+      "title": "Executive Vice President & Chief Strategy Officer",
+      "function": "executive",
+      "reports_to": "Rob McDonald, CEO",
+      "relationship_basis": "Inferred from title and news article referencing him in this role",
+      "source_url": "https://www.russellco.com/groundbreaking-a-y-mcdonald-mfg-co-foundry/",
+      "confidence": "high"
+    },
+    {
+      "name": "Mike McLeod",
+      "title": "Vice President of Sales",
+      "function": "other",
+      "reports_to": "Chad Huntington, President",
+      "relationship_basis": "Directly sourced from company website",
+      "source_url": "https://www.aymcdonald.com/en/content/about-us",
+      "confidence": "high"
+    },
+    {
+      "name": "B.O. (initials only known)",
+      "title": "Vice President of Production Planning & Logistics",
+      "function": "operations",
+      "reports_to": "Chad Huntington, President or Scott Knapp, EVP/CSO (inferred)",
+      "relationship_basis": "Inferred from LeadIQ data and title suggests oversight of supply chain and procurement",
+      "source_url": "https://www.leadiq.com/c/ay-mcdonald-mfg-co/employees",
+      "confidence": "medium"
+    },
+    {
+      "name": "J.B. (initials only known)",
+      "title": "Vice President of Operations",
+      "function": "operations",
+      "reports_to": "Chad Huntington, President or Rob McDonald, CEO (inferred)",
+      "relationship_basis": "Inferred from LeadIQ data",
+      "source_url": "https://www.leadiq.com/c/ay-mcdonald-mfg-co/employees",
+      "confidence": "medium"
+    },
+    {
+      "name": "D.R. (initials only known)",
+      "title": "Vice President of Product Development",
+      "function": "engineering",
+      "reports_to": "Chad Huntington, President (inferred)",
+      "relationship_basis": "Inferred from LeadIQ data",
+      "source_url": "https://www.leadiq.com/c/ay-mcdonald-mfg-co/employees",
+      "confidence": "medium"
+    },
+    {
+      "name": "S.S. (initials only known)",
+      "title": "Vice President of IT",
+      "function": "other",
+      "reports_to": "Rob McDonald, CEO or Chad Huntington, President (inferred)",
+      "relationship_basis": "Inferred from LeadIQ data; role at AY McDonald Industries",
+      "source_url": "https://www.leadiq.com/c/ay-mcdonald-mfg-co/employees",
+      "confidence": "medium"
+    },
+    {
+      "name": "Unknown (LinkedIn Member anonymized)",
+      "title": "Director of Strategic Sourcing - AY McDonald Industries",
+      "function": "supply_chain",
+      "reports_to": "VP of Production Planning & Logistics or VP of Operations (inferred)",
+      "relationship_basis": "Inferred from lead list alternative and title indicates strategic procurement leadership",
+      "source_url": "N/A (LinkedIn anonymized)",
+      "confidence": "low"
+    },
+    {
+      "name": "Unknown (LinkedIn Member anonymized)",
+      "title": "Purchasing Manager",
+      "function": "procurement",
+      "reports_to": "Director of Strategic Sourcing (inferred)",
+      "relationship_basis": "Inferred from lead list alternative and standard org structure",
+      "source_url": "N/A (LinkedIn anonymized)",
+      "confidence": "low"
+    },
+    {
+      "name": "Leanne Teasdale",
+      "title": "Procurement Specialist",
+      "function": "procurement",
+      "reports_to": "Purchasing Manager or Director of Strategic Sourcing (inferred)",
+      "relationship_basis": "Directly sourced from LinkedIn and confirmed via Hunter.io email verification; role is verified procurement specialist",
+      "source_url": "https://www.linkedin.com/in/leanne-teasdale-40014112",
+      "confidence": "high"
+    },
+    {
+      "name": "Andy Shea",
+      "title": "Director of New Foundry Team (Dickeyville)",
+      "function": "operations",
+      "reports_to": "Scott Knapp, EVP/CSO or VP of Operations (inferred)",
+      "relationship_basis": "Mentioned in WisDOT news article about Dickeyville road improvements as director of new foundry team",
+      "source_url": "https://spectrumnews1.com/wi/milwaukee/news/2025/07/29/dickeyville-old-highway-road-county-hh-a-y--mcdonald-mfg--co--",
+      "confidence": "medium"
+    },
+    {
+      "name": "Roy Sherman (possibly retired)",
+      "title": "Chairman (formerly, as of 2006)",
+      "function": "executive",
+      "reports_to": "Board of Directors",
+      "relationship_basis": "Historical source from 2006 acquisition announcement; may no longer be active",
+      "source_url": "https://www.supplyht.com/articles/89633-a-y-mcdonald-shares-history",
+      "confidence": "low"
+    }
+  ],
+  "outreach_angle": "Cronwell should position procurement automation as a way to manage the immense procurement complexity created by A.Y. McDonald's current scale: a new $340M brass foundry in Dickeyville, WI coming online in 2026, a new 340,000 sq ft manufacturing facility in Bristol, TN replacing Elizabethton, the ongoing Val-Matic integration, and a constant stream of new product launches (Commander meter valve, CoreCoat+ risers, Handy-Loc nut). These events mean A.Y. McDonald is simultaneously qualifying new suppliers for foundry equipment, raw materials, and coatings; managing the transition of suppliers from legacy facilities to new ones; and dealing with commodity price volatility (as evidenced by the July 2026 plumbing price increase). Automating supplier qualification, RFx, purchase order management and contract compliance across all these moving parts could save hundreds of hours for their 3-5 person procurement team. The outreach should name specific product families (Cambridge Couplings, Commander, Val-Matic lines) and facilities (Dickeyville, Bristol) as examples of where procurement automation could reduce manual work and expedite timelines.",
+  "open_questions": [
+    "Who is the Director of Strategic Sourcing (name and email)? This individual would be the primary decision-maker for a procurement automation deal.",
+    "Who is the Purchasing Manager? Could be a secondary contact or alternative buyer.",
+    "What is the exact procurement team size and structure (how many people, reporting lines)?",
+    "Does A.Y. McDonald currently use any procurement/project management software (ERP, P2P, sourcing tools)?",
+    "What is the commodity breakdown of their spend (brass ingot, steel, coatings, OEM components, maintenance supplies)?",
+    "What is the current supplier count and how many new suppliers are being onboarded for the new facilities?",
+    "Is there a centralized procurement function covering both the main manufacturing company and subsidiaries (Val-Matic, Cambridge Brass) or is procurement decentralized?",
+    "Who is the VP of Production Planning & Logistics (B.O.) and the VP of Operations (J.B.) full names and contact details?"
+  ],
+  "sources": [
+    {
+      "title": "A.Y. McDonald - About Us",
+      "url": "https://www.aymcdonald.com/en/content/about-us",
+      "date": "2026"
+    },
+    {
+      "title": "A.Y. McDonald - Our Locations",
+      "url": "https://www.aymcdonald.com/en/content/our-locations",
+      "date": "2026"
+    },
+    {
+      "title": "A.Y. McDonald - Our History",
+      "url": "https://www.aymcdonald.com/en/content/our-history",
+      "date": "2026"
+    },
+    {
+      "title": "A.Y. McDonald - Product Certifications",
+      "url": "https://www.aymcdonald.com/en/content/product-certifications",
+      "date": "2026"
+    },
+    {
+      "title": "A.Y. McDonald - Plumbing Valves Catalog",
+      "url": "https://www.aymcdonald.com/en/catalog/node/plumbing-plumbing-valves",
+      "date": "2026"
+    },
+    {
+      "title": "A.Y. McDonald - Gate Valve Catalog",
+      "url": "https://www.aymcdonald.com/en/catalog/node/plumbing-plumbing-valves-gate-valve-nl",
+      "date": "2026"
+    },
+    {
+      "title": "A.Y. McDonald - Cambridge Couplings Catalog",
+      "url": "https://www.aymcdonald.com/en/catalog/node/water-works-service-fittings-cambridge-couplings",
+      "date": "2026"
+    },
+    {
+      "title": "A.Y. McDonald - News (The Commander, CoreCoat+, Handy-Loc, etc.)",
+      "url": "https://www.aymcdonald.com/en/news",
+      "date": "2026"
+    },
+    {
+      "title": "A.Y. McDonald - LinkedIn Company Page",
+      "url": "https://www.linkedin.com/company/a-y-mcdonald-mfg-co-",
+      "date": "2026"
+    },
+    {
+      "title": "AWWA Career Center - A.Y. McDonald Mfg. Co. Profile",
+      "url": "https://careercenter.awwa.org/profile/ay-mcdonald-mfg-co/898231/",
+      "date": "2026"
+    },
+    {
+      "title": "Encyclopedia Dubuque - A.Y. McDonald Manufacturing Company",
+      "url": "https://www.encyclopediadubuque.org/index.php/A.Y.MCDONALD_MANUFACTURING_COMPANY",
+      "date": "2026"
+    },
+    {
+      "title": "Delta3 Engineering - Tax Credits for Dickeyville Foundry",
+      "url": "https://delta3eng.biz/company-awarded-5-85-million-in-tax-credits-for-sw-wisconsin-foundry-project/",
+      "date": "2024-01-24"
+    },
+    {
+      "title": "Spectrum News - Dickeyville Foundry Road Improvements",
+      "url": "https://spectrumnews1.com/wi/milwaukee/news/2025/07/29/dickeyville-old-highway-road-county-hh-a-y--mcdonald-mfg--co--",
+      "date": "2025-07-29"
+    },
+    {
+      "title": "Russell Construction - A.Y. McDonald Foundry Groundbreaking",
+      "url": "https://www.russellco.com/groundbreaking-a-y-mcdonald-mfg-co-foundry/",
+      "date": "2023-08-12"
+    },
+    {
+      "title": "Business Journal - A.Y. McDonald Plans Bristol Relocation",
+      "url": "https://bjournal.com/a-y-mcdonald-plans-bristol-relocation/",
+      "date": "2025"
+    },
+    {
+      "title": "Needham DBS - A.Y. McDonald Foundry Steel",
+      "url": "https://www.needham-dbs.com/ay-mcdonald-foundry",
+      "date": "2024"
+    },
+    {
+      "title": "Supply House Times - A.Y. McDonald Acquires Cambridge Brass",
+      "url": "https://www.supplyht.com/articles/89633-a-y-mcdonald-shares-history",
+      "date": "2006-05-10"
+    },
+    {
+      "title": "Non-Ferrous Founders' Society - A.Y. McDonald Profile",
+      "url": "https://www.nffs.org/find-a-foundry/ay-mcdonald-manufacturing-co",
+      "date": "2026"
+    },
+    {
+      "title": "LeadIQ - A.Y. McDonald Mfg. Co. Employees",
+      "url": "https://www.leadiq.com/c/ay-mcdonald-mfg-co/employees",
+      "date": "2026"
+    },
+    {
+      "title": "Tracxn - A.Y. McDonald Company Profile",
+      "url": "https://tracxn.com/d/companies/aymcdonald/__ovXf-v1120M6HgcXhs4rmw0jpQCrbU9qucbVdc4bYU8",
+      "date": "2026"
+    },
+    {
+      "title": "A.Y. McDonald - No Lead Brass Brochure",
+      "url": "https://www.aymcdonald.com/Image/GetDocument/en/272/no-lead%20brochure.pdf",
+      "date": "2026"
+    },
+    {
+      "title": "Utility Pipe Supply - A.Y. McDonald Products",
+      "url": "https://utilitypipesupply.com/collections/ay-mcdonald",
+      "date": "2026"
+    },
+    {
+      "title": "Supply House Times - A.Y. McDonald Celebrates 150th Anniversary",
+      "url": "https://www.supplyht.com/articles/89633-a-y-mcdonald-shares-history",
+      "date": "2006-03-10"
+    }
+  ]
+}
+```

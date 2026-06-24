@@ -5,6 +5,7 @@ export type DeepResearchSubmitOptions = {
   maxConcurrentResearchUnits?: number;
   maxResearcherIterations?: number;
   maxReactToolCalls?: number;
+  forceRefresh?: boolean;
 };
 
 export type DeepResearchSubmitInput = {

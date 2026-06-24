@@ -1,0 +1,185 @@
+```json
+{
+  "company": "Cla-Val",
+  "fit_score": 4,
+  "fit_reason": "Cla-Val is a strong manufacturing prospect with a complex, high-mix production environment (3,500+ valve models, 50+ alloys, two on-site foundries) and a significant recent leadership transition (new CEO and COO as of Jan 1, 2026) that signals operational focus on supply chain and manufacturing capabilities. The company has a clear procurement function (multiple purchasing coordinators identified) but the overall organizational depth and procurement complexity is not fully public. Score is 4 rather than 5 because the trigger event, while relevant, is leadership-focused rather than a direct procurement expansion signal, and the full procurement org structure remains somewhat opaque.",
+  "manufacturing_profile": "Cla-Val is a designer and manufacturer of automatic control valves for waterworks, fire protection, marine, fueling, and industrial markets. Their product line includes over 3,500 automatic control valve models [20] across families such as pressure reducing valves (Series 90), pressure relief/sustaining valves (Series 50), pump control valves (Series 60), altitude and level control valves (Series 100, 210, 270), flow control valves (Series 40), solenoid control valves (Series 136), check valves, surge anticipator valves, cavitation prevention valves, air and vacuum breaker valves, and electronic control valves. Valves range from 2 to 36 inches in standard sizes [12] and are manufactured in more than 50 different alloys [14].\n\nTheir global headquarters and main factory is an 1701 Placentia Avenue, Costa Mesa, CA [2][3][6][14]. This facility houses two on-site foundries (Soundcast Company for sand casting and Griswold Castings for investment/lost wax casting) [14], a metallurgical lab, Mazak multi-task CNC machining centers, CAD/CAM software, rapid prototyping technology, a pattern shop, in-house diaphragm cutting, fusion bonded epoxy coating line, and a testing area for simulated real-world applications [4]. They also operate a 110,000 square-foot facility in Beamsville, Ontario, Canada [13] and have additional locations in Switzerland, the United Kingdom, France, and New Zealand [14].\n\nThe company produces more than 30,000 different parts and components [4] with engineering/R&D using 3D modeling, computational fluid dynamics, and finite element analysis. Manufacturing complexity is high: they assemble, machine, pressure test all valves, and perform special testing (radiography, liquid penetrant, positive material ID) as required [4]. The ISO-required quality control program is audited by UL, Factory Mutual, NSF, and the Water Quality Association [4].",
+  "recent_triggers": [
+    {
+      "trigger": "Leadership transition: John Link appointed President & CEO, Ryan Pickett promoted to COO, Martin Pickett becomes Chairman of the Board",
+      "date": "2026-01",
+      "why_it_matters": "New CEO and COO likely bring strategic priorities around operational efficiency and supply chain. Ryan Pickett's COO role specifically mentions execution of operational growth initiatives supporting manufacturing and supply capabilities [23], making this an ideal time to pitch procurement automation.",
+      "source_url": "https://h2oglobalnews.com/cla-val-leadership-transition-ceo-coo/"
+    },
+    {
+      "trigger": "Ryan Pickett promoted to COO with focus on manufacturing and supply capabilities",
+      "date": "2026-01",
+      "why_it_matters": "The COO's explicit mandate includes 'execution of operational growth initiatives supporting the company's manufacturing and supply capabilities' [23], indicating direct relevance for procurement and supply chain improvements.",
+      "source_url": "https://h2oglobalnews.com/cla-val-leadership-transition-ceo-coo/"
+    },
+    {
+      "trigger": "Cla-Val featured in Valve World and WaterWorld publications in late 2025",
+      "date": "2025-12",
+      "why_it_matters": "Active media presence suggests a company investing in brand and likely expanding. The WaterWorld article specifically discusses developing valve software [25], indicating digital/technology investment mindset.",
+      "source_url": "https://www.cla-val.com/news"
+    },
+    {
+      "trigger": "Continued investment in manufacturing capabilities: thermal sand reclamation, air filtration, high-efficiency furnaces",
+      "date": "2024",
+      "why_it_matters": "Capital investments in foundry and environmental upgrades demonstrate operational focus and willingness to invest in manufacturing infrastructure and efficiency.",
+      "source_url": "https://www.cla-val.com/about-us"
+    },
+    {
+      "trigger": "Cla-Val Canada facility expansion to 110,000 sq ft in Beamsville, Ontario",
+      "date": "unknown",
+      "why_it_matters": "Expanded Canadian facility signals growth in manufacturing footprint and likely increased supply chain complexity.",
+      "source_url": "https://www.cla-val.com/cla-val-canada"
+    },
+    {
+      "trigger": "New product innovation: X1 43 Power Generator, 33 Series Electronic Actuator, X144 Electronic Flow Meter",
+      "date": "2025",
+      "why_it_matters": "New product development indicates R&D investment and potentially new supplier needs for electronic components and specialized materials.",
+      "source_url": "https://www.cla-val.com/news/tech-talk-managing-automatic-control-valves"
+    }
+  ],
+  "recommended_contact": {
+    "name": "Ryan Pickett",
+    "title": "Chief Operating Officer",
+    "email": null,
+    "linkedin_url": null,
+    "why_this_person": "Ryan Pickett was promoted to COO effective January 1, 2026, with a specific mandate to execute operational growth initiatives supporting manufacturing and supply capabilities [23]. As COO, he would oversee both manufacturing operations and the supply chain/procurement function, making him the most senior and directly relevant executive for a procurement-automation pitch. The Purchasing Coordinators (Victor Tran, Beverly Nong) are tactical buyers; the COO is the strategic decision-maker for operational efficiency investments."
+  },
+  "org_chart": [
+    {
+      "name": "Martin W. Pickett",
+      "title": "Chairman of the Board",
+      "function": "executive",
+      "reports_to": "Board of Directors",
+      "relationship_basis": "Directly sourced from H2O Global News article [23]",
+      "source_url": "https://h2oglobalnews.com/cla-val-leadership-transition-ceo-coo/",
+      "confidence": "high"
+    },
+    {
+      "name": "John Link",
+      "title": "President and Chief Executive Officer",
+      "function": "executive",
+      "reports_to": "Martin W. Pickett (Chairman)",
+      "relationship_basis": "Directly sourced from H2O Global News article [23]; 35 years at Cla-Val",
+      "source_url": "https://h2oglobalnews.com/cla-val-leadership-transition-ceo-coo/",
+      "confidence": "high"
+    },
+    {
+      "name": "Ryan Pickett",
+      "title": "Chief Operating Officer",
+      "function": "operations",
+      "reports_to": "John Link (CEO)",
+      "relationship_basis": "Directly sourced from H2O Global News article [23]; role covers manufacturing and supply capabilities",
+      "source_url": "https://h2oglobalnews.com/cla-val-leadership-transition-ceo-coo/",
+      "confidence": "high"
+    },
+    {
+      "name": "David Koeblitz",
+      "title": "Executive Vice President and Chief Financial Officer",
+      "function": "finance",
+      "reports_to": "John Link (CEO)",
+      "relationship_basis": "Directly sourced from H2O Global News article [23]",
+      "source_url": "https://h2oglobalnews.com/cla-val-leadership-transition-ceo-coo/",
+      "confidence": "high"
+    },
+    {
+      "name": "Hugo Van Buel",
+      "title": "Executive Vice President of European Operations",
+      "function": "operations",
+      "reports_to": "John Link (CEO)",
+      "relationship_basis": "Directly sourced from H2O Global News article [23] and cla-val.ch [20]",
+      "source_url": "https://h2oglobalnews.com/cla-val-leadership-transition-ceo-coo/",
+      "confidence": "high"
+    },
+    {
+      "name": "Victor Tran",
+      "title": "Purchasing Coordinator",
+      "function": "procurement",
+      "reports_to": "Inferred: likely reports to a Purchasing Manager or Supply Chain Director (not publicly identified)",
+      "relationship_basis": "Directly sourced from lead list (vtran@cla-val.com) and LinkedIn",
+      "source_url": "https://www.linkedin.com/in/victor-tran-607668299",
+      "confidence": "high"
+    },
+    {
+      "name": "Beverly Nong",
+      "title": "Purchasing Coordinator",
+      "function": "procurement",
+      "reports_to": "Inferred: likely reports to a Purchasing Manager or Supply Chain Director (not publicly identified)",
+      "relationship_basis": "Directly sourced from lead list and LinkedIn",
+      "source_url": "https://www.linkedin.com/in/beverlynong",
+      "confidence": "high"
+    },
+    {
+      "name": "Unknown",
+      "title": "Purchasing Manager (at least one exists)",
+      "function": "procurement",
+      "reports_to": "Inferred: likely reports to Ryan Pickett (COO) or another operations executive",
+      "relationship_basis": "Inferred from LinkedIn search results showing 'Purchasing Manager at Cla-Val' as a role, but name not publicly visible [lead list]",
+      "source_url": null,
+      "confidence": "low"
+    },
+    {
+      "name": "Unknown",
+      "title": "VP of Supply Chain / Director of Procurement",
+      "function": "supply_chain",
+      "reports_to": "Inferred: likely reports to Ryan Pickett (COO)",
+      "relationship_basis": "Inferred role; not publicly identified. A company of Cla-Val's size and complexity (3,500+ models, 50+ alloys, global operations) would typically have a supply chain leader at director or VP level.",
+      "source_url": null,
+      "confidence": "low"
+    },
+    {
+      "name": "Unknown",
+      "title": "VP of Engineering / CTO",
+      "function": "engineering",
+      "reports_to": "Inferred: likely reports to John Link (CEO)",
+      "relationship_basis": "Inferred role; not publicly identified. Cla-Val's engineering team uses 3D modeling, CFD, FEA, and rapid prototyping [4], indicating senior engineering leadership.",
+      "source_url": null,
+      "confidence": "low"
+    }
+  ],
+  "outreach_angle": "Given the January 2026 leadership transition where Ryan Pickett was elevated to COO with a clear mandate to execute operational growth initiatives supporting manufacturing and supply capabilities [23], Cronwell should position procurement automation as a strategic enabler for the new COO's agenda. The angle should acknowledge Cla-Val's complex manufacturing environment (3,500+ valve models across 50+ alloys, two foundries, 30,000+ parts) and suggest that automating procurement workflows could accelerate their operational growth initiatives, improve supplier coordination, and free up the purchasing team for strategic sourcing. Reference the company's recent investments in manufacturing technology and environmental upgrades as evidence they are a forward-thinking operation ready for the next efficiency frontier. Target Ryan Pickett directly via LinkedIn or email, or reach out to John Link/CEO with a strategic framing.",
+  "open_questions": [
+    "What is the name and title of the Purchasing Manager or Director of Procurement/Supply Chain (the person to whom Victor Tran and Beverly Nong report)?",
+    "Is there a VP of Supply Chain or Director of Procurement at Cla-Val?",
+    "What is the size and structure of the procurement/supply chain team beyond the two identified purchasing coordinators?",
+    "Does Cla-Val use an ERP system, and if so, which one?",
+    "What is the approximate annual spend on direct materials (castings, alloys, seals, actuators, etc.)?",
+    "Has Cla-Val been acquired by or is it owned by a private equity firm or holding company? Current evidence suggests privately held and independent.",
+    "What are the specific suppliers/categories that represent the highest procurement complexity (e.g., specialty alloys, electronic components, rubber diaphragms)?",
+    "Is there a formal strategic sourcing or supplier development function?",
+    "What is the email format for Ryan Pickett, John Link, or David Koeblitz?",
+    "Does the company have any recent plans for further facility expansion or acquisition?"
+  ],
+  "sources": [
+    "[1] Cla-Val Homepage (video uploaded May 2026): https://www.cla-val.com/",
+    "[2] Cla-Val Facebook Page: https://www.facebook.com/clavalusa/",
+    "[3] Cla-Val About Us: https://www.cla-val.com/about-us",
+    "[4] Cla-Val Tech Talk: Managing Automatic Control Valves (July 9, 2025): https://www.cla-val.com/news/tech-talk-managing-automatic-control-valves",
+    "[5] Cla-Val LinkedIn: https://www.linkedin.com/company/cla-val",
+    "[6] Cla-Val Altitude & Level Control Valves: https://www.cla-val.com/waterworks/altitude-and-level-control-valves",
+    "[7] Cla-Val Hydraulic Altitude & Level Control Valves: https://www.cla-val.com/waterworks/altitude-and-level-control-valves/hydraulic-altitude-and-level-control-valves",
+    "[8] Cla-Val 210-01 & 610-01 Altitude Valve: https://www.cla-val.com/waterworks/altitude-and-level-control-valves/hydraulic-altitude-and-level-control-valves/210-01-610-01",
+    "[9] Cla-Val 210-09 Altitude and Sustaining Valve Video: https://www.cla-val.com/resources/videos-and-product-animations",
+    "[10] Cla-Val 124-01 & 624-01 Float Valve: https://www.cla-val.com/waterworks/altitude-and-level-control-valves/hydraulic-altitude-and-level-control-valves/124-01-624-01",
+    "[11] Cla-Val 210-01 & 610-01 Altitude Valve (data sheet page): https://www.cla-val.com/waterworks/altitude-and-level-control-valves/hydraulic-altitude-and-level-control-valves/210-01-610-01",
+    "[12] Cla-Val 210-16 Altitude Valve Data Sheet (PDF): https://www.cla-val.com/wp-content/uploads/2020/05/210-16-Data-Sheet-US_Metric.pdf",
+    "[13] Cla-Val Canada: https://www.cla-val.com/cla-val-canada",
+    "[14] Cla-Val Statement of Qualifications (PDF via dmvalve.com): https://dmvalve.com/wp-content/uploads/2018/11/Statement_of_Qualifications.pdf",
+    "[15] Cla-Val Factory & Foundry Tour (YouTube): https://www.youtube.com/watch?v=RBfbyMglQ-g",
+    "[16] Cla-Val Waterworks Page: https://www.cla-val.com/waterworks",
+    "[17] Cla-Val Pacific Waterworks Products: https://www.cla-valpacific.com/waterworks",
+    "[18] Cla-Val Swiss Waterworks Page (cla-val.ch): https://cla-val.ch/en/solutions/waterworks/",
+    "[19] Cla-Val Fire Protection Page: https://www.cla-val.com/fire-protection",
+    "[20] Cla-Val News & Events: https://www.cla-val.com/news-and-events",
+    "[21] Cla-Val News Archives: https://www.cla-val.com/news",
+    "[22] Cla-Val Author Page (Page 2 of 6): https://www.cla-val.com/author/clavale/page/2",
+    "[23] H2O Global News - Cla-Val announces leadership transition with new CEO and COO appointments (2026-01): https://h2oglobalnews.com/cla-val-leadership-transition-ceo-coo/",
+    "[24] Hamilton pilots real-time pressure zone monitoring system (Cla-Val news, June 17, 2026): https://www.cla-val.com/news",
+    "[25] WaterWorld: Developing valve software for the water industry (Cla-Val news, December 2, 2025): https://www.cla-val.com/news"
+  ]
+}
+```

@@ -7,6 +7,8 @@
   "scripts": {
     "build": "pnpm --filter @fcdx/cli build && pnpm --filter @fcdx/deepresearch build",
     "check": "pnpm --filter @fcdx/cli check && pnpm --filter @fcdx/deepresearch check",
+    "dev": "concurrently --names api,worker --prefix-colors cyan,green --kill-others-on-fail \"pnpm deepresearch:api\" \"pnpm deepresearch:worker\"",
+    "dev:stub": "DEEPRESEARCH_RUNNER=stub concurrently --names api,worker --prefix-colors cyan,green --kill-others-on-fail \"pnpm deepresearch:api\" \"pnpm deepresearch:worker\"",
     "deepresearch:api": "pnpm --filter @fcdx/deepresearch api",
     "deepresearch:prepare": "pnpm --filter @fcdx/deepresearch prepare:input",
     "deepresearch:check": "pnpm --filter @fcdx/deepresearch check",
@@ -15,6 +17,7 @@
     "install-fcdx": "pnpm --filter @fcdx/cli build && node scripts/install-fcdx.mjs"
   },
   "devDependencies": {
+    "concurrently": "^10.0.3",
     "typescript": "^5.9.3"
   }
 }

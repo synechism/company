@@ -1,0 +1,32 @@
+{
+  "start": "2026-06-24T16:36:47Z",
+  "end": "2026-06-24T16:39:49Z",
+  "duration_seconds": 181.25,
+  "error": null,
+  "event_counts": {
+    "clarify_with_user": 1,
+    "write_research_brief": 1,
+    "research_supervisor": 1,
+    "final_report_generation": 1
+  },
+  "configurable": {
+    "thread_id": "fcdx-deepresearch-e34119ba-065c-4904-9621-55f0a190917a",
+    "allow_clarification": false,
+    "search_api": "firecrawl",
+    "max_concurrent_research_units": 1,
+    "max_researcher_iterations": 2,
+    "max_react_tool_calls": 4,
+    "research_model": "openai:deepseek-chat",
+    "research_model_max_tokens": 4096,
+    "compression_model": "openai:deepseek-chat",
+    "compression_model_max_tokens": 4096,
+    "final_report_model": "openai:deepseek-chat",
+    "final_report_model_max_tokens": 8192,
+    "summarization_model": "openai:deepseek-chat",
+    "summarization_model_max_tokens": 4096
+  },
+  "output_path": "/home/abhi/dataset/packages/deepresearch/results/water-valves/open-deep-research-reports/full-list-20260624/jobs/e34119ba-065c-4904-9621-55f0a190917a/report.txt",
+  "output_chars": 17964,
+  "starts_with_json": false,
+  "contains_org_chart": true
+}

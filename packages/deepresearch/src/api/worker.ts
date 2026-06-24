@@ -15,6 +15,7 @@ Environment:
   DEEPRESEARCH_QUEUE                BullMQ queue name, default fcdx-deepresearch
   DEEPRESEARCH_WORKER_CONCURRENCY   Jobs claimed by this worker, default 1
   DEEPRESEARCH_RESULTS_DIR          Job artifact root
+  DEEPRESEARCH_COMPANY_CACHE_ROOT   Per-company cache root, default output/cache/firecrawl
   DEEPRESEARCH_RUNNER               open-deep-research or stub
   OPEN_DEEP_RESEARCH_DIR            External LangChain checkout path
 `);

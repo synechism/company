@@ -55,7 +55,19 @@ accepts jobs, BullMQ stores them in Redis, and workers claim jobs and write a
 per-job artifact folder containing `prompt.md`, `report.txt`, `run.json`, and
 `job.json`.
 
-Start Redis first. Then run the API and at least one worker:
+Start Redis first. Then run the API and at least one worker from the repo root:
+
+```bash
+pnpm dev
+```
+
+For stubbed queue/API testing:
+
+```bash
+pnpm dev:stub
+```
+
+You can still run the two processes separately when debugging:
 
 ```bash
 pnpm deepresearch:api
@@ -69,6 +81,7 @@ Important environment variables:
 - `DEEPRESEARCH_API_PORT`: API port. Defaults to `8787`.
 - `DEEPRESEARCH_QUEUE`: BullMQ queue name. Defaults to `fcdx-deepresearch`.
 - `DEEPRESEARCH_RESULTS_DIR`: Job artifact root. Defaults to `packages/deepresearch/results/jobs`.
+- `DEEPRESEARCH_COMPANY_CACHE_ROOT`: fallback per-company report cache root. Defaults to `output/cache/firecrawl`.
 - `DEEPRESEARCH_RUNNER`: `open-deep-research` or `stub`.
 - `OPEN_DEEP_RESEARCH_DIR`: External checkout path.
 
@@ -94,6 +107,23 @@ fcdx config env set API_URL http://127.0.0.1:8787
 fcdx deepresearch submit --prompt-file packages/deepresearch/results/water-valves/tasks/kennedy-valve-company-BFKJ7LbO.md
 fcdx deepresearch wait --job-id <job_id> --output output/reports/kennedy-valve.txt
 ```
+
+For list runs, write a manifest and inspect aggregate status:
+
+```bash
+fcdx deepresearch submit-list \
+  --list water-valve-qualified \
+  --prompt-file packages/deepresearch/prompts/manufacturing-outreach-research.md \
+  --output output/deepresearch/water-valve-jobs.json
+
+fcdx deepresearch status-list --jobs-file output/deepresearch/water-valve-jobs.json
+```
+
+Company-scoped jobs cache the finished report at
+`<company-cache-root>/<safe-company-id>/deepresearch/report.txt`. The default
+company cache root is the Firecrawl cache root, but the deepresearch files live
+in a dedicated `deepresearch/` subfolder so Firecrawl page caching remains
+separate. Pass `--force-refresh` to bypass the report cache.
 
 ## Comparison Plan
 

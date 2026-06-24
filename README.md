@@ -103,6 +103,7 @@ Common environment variables:
 - `HUNTER_API_KEY`: Hunter API key for verified lead email lookup.
 - `API_URL`: deepresearch API URL used by `fcdx deepresearch`.
 - `REDIS_URL`: Redis URL used by the deepresearch API and workers.
+- `DEEPRESEARCH_COMPANY_CACHE_ROOT`: fallback per-company report cache root.
 
 Do not commit `.env` files.
 
@@ -149,6 +150,7 @@ API_URL=http://127.0.0.1:8787
 
 # Required for the deepresearch API/worker service
 REDIS_URL=redis://127.0.0.1:6379
+DEEPRESEARCH_COMPANY_CACHE_ROOT=output/cache/firecrawl
 DEEPRESEARCH_RUNNER=open-deep-research
 ```
 
@@ -437,7 +439,22 @@ Deep research runs asynchronously through `packages/deepresearch`: the API
 accepts jobs, Redis/BullMQ stores the queue, and one or more workers claim jobs
 and write `report.txt` artifacts.
 
-Start Redis, then run the API and a worker in separate terminals:
+Start Redis, then run the API and a worker together from the repo root:
+
+```bash
+pnpm dev
+```
+
+For a cheap local queue smoke test that never launches the real research model:
+
+```bash
+pnpm dev:stub
+```
+
+The `fcdx` CLI is not a daemon; use it from another terminal while `pnpm dev`
+keeps the API and worker running.
+
+You can still run the pieces separately when debugging:
 
 ```bash
 pnpm deepresearch:api
@@ -463,12 +480,14 @@ Submit one job per company in a list:
 fcdx deepresearch submit-list \
   --list water-valve-qualified \
   --prompt-file packages/deepresearch/prompts/manufacturing-outreach-research.md \
-  --limit 5
+  --limit 5 \
+  --output output/deepresearch/water-valve-jobs.json
 ```
 
-Inspect or fetch a report:
+Inspect a whole submitted list or fetch one report:
 
 ```bash
+fcdx deepresearch status-list --jobs-file output/deepresearch/water-valve-jobs.json
 fcdx deepresearch status --job-id <job_id>
 fcdx deepresearch wait --job-id <job_id> --output output/reports/company.txt
 fcdx deepresearch report --job-id <job_id>
@@ -476,6 +495,11 @@ fcdx deepresearch report --job-id <job_id>
 
 Use `--runner stub` for cheap queue/API smoke tests. Use the default
 `open-deep-research` runner for real research.
+
+When a job has a `company_id`, deepresearch caches the finished report under the
+same company cache root as Firecrawl, but in its own subfolder:
+`<firecrawl-cache-root>/<safe-company-id>/deepresearch/report.txt`. Re-running
+the same company returns that cached report unless you pass `--force-refresh`.
 
 Implementation details and the runbook are documented in
 [docs/deepresearch-async-api.md](docs/deepresearch-async-api.md).

@@ -22,7 +22,7 @@ import {
   type FcdxConfig,
   type FcdxProfile,
 } from "../config.js";
-import { appendJsonl } from "../crawl/artifacts.js";
+import { appendJsonl, safeName } from "../crawl/artifacts.js";
 import type { CandidateCompany } from "../types.js";
 import type { EnrichedCompany } from "../types.js";
 import {
@@ -1946,12 +1946,14 @@ Examples:
   fcdx deepresearch submit --prompt-file packages/deepresearch/results/water-valves/tasks/kennedy-valve-company-BFKJ7LbO.md
   fcdx deepresearch submit-list --list water-valve-qualified --prompt-file packages/deepresearch/prompts/manufacturing-outreach-research.md --limit 5
   fcdx deepresearch status --job-id job_id_here
+  fcdx deepresearch status-list --jobs-file output/deepresearch/jobs.json
   fcdx deepresearch report --job-id job_id_here --output output/reports/company.txt
 
 Subcommand options:
   fcdx deepresearch submit --help
   fcdx deepresearch submit-list --help
   fcdx deepresearch status --help
+  fcdx deepresearch status-list --help
   fcdx deepresearch wait --help
   fcdx deepresearch report --help
 `,
@@ -1964,6 +1966,10 @@ deepresearch
   .option("--job-id <id>", "Optional deterministic job id")
   .option("--prompt <text>", "Prompt text to submit")
   .option("--prompt-file <path>", "Prompt file to submit")
+  .option("--company-id <id>", "Optional company id used for deepresearch cache lookup/write")
+  .option("--company-name <name>", "Optional company name stored in job metadata")
+  .option("--website <domain>", "Optional company website stored in job metadata")
+  .option("--cache-dir <path>", "Company cache root; deepresearch uses <root>/<company-id>/deepresearch", resolveFirecrawlCacheDir())
   .option("--metadata-json <json>", "Optional JSON metadata stored on the job")
   .option("--runner <name>", "Runner: open-deep-research or stub")
   .option("--search-api <name>", "Search backend for Open Deep Research, e.g. firecrawl")
@@ -1971,12 +1977,14 @@ deepresearch
   .option("--max-concurrent-research-units <n>", "Open Deep Research concurrency", parseIntArg)
   .option("--max-researcher-iterations <n>", "Open Deep Research supervisor iterations", parseIntArg)
   .option("--max-react-tool-calls <n>", "Open Deep Research tool-call budget", parseIntArg)
+  .option("--force-refresh", "Bypass a cached deepresearch report for this company", false)
   .addHelpText(
     "after",
     `
 Examples:
   fcdx deepresearch submit --prompt-file packages/deepresearch/results/water-valves/tasks/kennedy-valve-company-BFKJ7LbO.md
   fcdx deepresearch submit --prompt "Research Kennedy Valve for procurement outreach" --metadata-json '{"company":"kennedy valve"}'
+  fcdx deepresearch submit --company-id pdl_company_id_here --prompt-file /tmp/task.md
   fcdx deepresearch submit --prompt-file /tmp/task.md --runner stub
 
 The API URL is read from --api-url, then config env API_URL, then
@@ -1990,7 +1998,13 @@ http://127.0.0.1:8787.
       const response = await client.submit({
         jobId: options.jobId,
         prompt,
-        metadata: parseJsonOption(options.metadataJson) as Record<string, unknown> | undefined,
+        metadata: deepResearchMetadata({
+          metadata: parseJsonOption(options.metadataJson) as Record<string, unknown> | undefined,
+          companyId: options.companyId,
+          companyName: options.companyName,
+          website: options.website,
+          cacheDir: options.cacheDir,
+        }),
         options: deepResearchSubmitOptions(options),
       });
       console.log(JSON.stringify(response, null, 2));
@@ -2008,18 +2022,22 @@ deepresearch
   .option("--prompt <text>", "Prompt template text; company context is appended")
   .option("--prompt-file <path>", "Prompt template file; company context is appended")
   .option("--limit <n>", "Maximum list members to submit", parseIntArg)
+  .option("--cache-dir <path>", "Company cache root; deepresearch uses <root>/<company-id>/deepresearch", resolveFirecrawlCacheDir())
   .option("--metadata-json <json>", "Optional JSON metadata merged into every job")
+  .option("-o, --output <path>", "Optional JSON manifest output path for status-list")
   .option("--runner <name>", "Runner: open-deep-research or stub")
   .option("--search-api <name>", "Search backend for Open Deep Research, e.g. firecrawl")
   .option("--model <model>", "Research model, e.g. openai:deepseek-chat")
   .option("--max-concurrent-research-units <n>", "Open Deep Research concurrency", parseIntArg)
   .option("--max-researcher-iterations <n>", "Open Deep Research supervisor iterations", parseIntArg)
   .option("--max-react-tool-calls <n>", "Open Deep Research tool-call budget", parseIntArg)
+  .option("--force-refresh", "Bypass cached deepresearch reports for this list run", false)
   .addHelpText(
     "after",
     `
 Examples:
   fcdx deepresearch submit-list --list water-valve-qualified --prompt-file packages/deepresearch/prompts/manufacturing-outreach-research.md --limit 3
+  fcdx deepresearch submit-list --list water-valve-qualified --prompt-file packages/deepresearch/prompts/manufacturing-outreach-research.md --output output/deepresearch/jobs.json
   fcdx deepresearch submit-list --list targets --prompt "Research this company for Cronwell outreach" --runner stub
 
 Each job receives the prompt template plus the company row, list membership
@@ -2043,6 +2061,7 @@ metadata, tags, and list-local fields from DuckDB.
             company_id: member.company.id,
             company_name: member.company.name,
             website: member.company.website,
+            deepresearch_cache_dir: deepResearchCompanyCacheDir(member.company.id, options.cacheDir),
           },
           options: deepResearchSubmitOptions(options),
         });
@@ -2052,7 +2071,12 @@ metadata, tags, and list-local fields from DuckDB.
           ...response,
         });
       }
-      console.log(JSON.stringify({ list: listData.list.name, jobs: submitted.length, submitted }, null, 2));
+      const output = { list: listData.list.name, jobs: submitted.length, submitted };
+      if (options.output) {
+        await fs.mkdir(path.dirname(options.output), { recursive: true });
+        await fs.writeFile(options.output, `${JSON.stringify(output, null, 2)}\n`, "utf8");
+      }
+      console.log(JSON.stringify({ ...output, output: options.output }, null, 2));
     } catch (error) {
       exitWithError(error);
     } finally {
@@ -2077,6 +2101,59 @@ Example:
     try {
       const client = createDeepResearchClient(options.apiUrl);
       console.log(JSON.stringify(await client.status(options.jobId), null, 2));
+    } catch (error) {
+      exitWithError(error);
+    }
+  });
+
+deepresearch
+  .command("status-list")
+  .description("Fetch aggregate status for jobs written by deepresearch submit-list")
+  .requiredOption("--jobs-file <path>", "JSON manifest from fcdx deepresearch submit-list --output")
+  .option("--api-url <url>", "Deepresearch API URL; defaults to config env API_URL", resolveDeepResearchApiUrl())
+  .option("-o, --output <path>", "Optional JSON status output path")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx deepresearch status-list --jobs-file output/deepresearch/jobs.json
+  fcdx deepresearch status-list --jobs-file output/deepresearch/jobs.json --output output/deepresearch/status.json
+`,
+  )
+  .action(async (options) => {
+    try {
+      const client = createDeepResearchClient(options.apiUrl);
+      const manifest = parseJsonOption(await fs.readFile(options.jobsFile, "utf8")) as { submitted?: Array<Record<string, unknown>> };
+      const submitted = manifest.submitted ?? [];
+      const rows: Array<Record<string, unknown>> = [];
+      for (const row of submitted) {
+        const jobId = String(row.job_id ?? "");
+        if (!jobId) continue;
+        const status = await client.status(jobId);
+        const result = status.result && typeof status.result === "object" ? status.result as Record<string, unknown> : {};
+        rows.push({
+          company_id: row.company_id,
+          company_name: row.company_name,
+          job_id: jobId,
+          state: status.state,
+          failed_reason: status.failed_reason,
+          cache_hit: result.cache_hit,
+          report_path: result.report_path,
+          cache_dir: result.cache_dir,
+          finished_at: status.finished_at,
+        });
+      }
+      const counts = rows.reduce<Record<string, number>>((acc, row) => {
+        const state = String(row.state ?? "unknown");
+        acc[state] = (acc[state] ?? 0) + 1;
+        return acc;
+      }, {});
+      const output = { jobsFile: options.jobsFile, jobs: rows.length, counts, rows };
+      if (options.output) {
+        await fs.mkdir(path.dirname(options.output), { recursive: true });
+        await fs.writeFile(options.output, `${JSON.stringify(output, null, 2)}\n`, "utf8");
+      }
+      console.log(JSON.stringify({ ...output, output: options.output }, null, 2));
     } catch (error) {
       exitWithError(error);
     }
@@ -2379,6 +2456,7 @@ function deepResearchSubmitOptions(options: {
   maxConcurrentResearchUnits?: number;
   maxResearcherIterations?: number;
   maxReactToolCalls?: number;
+  forceRefresh?: boolean;
 }): DeepResearchSubmitOptions | undefined {
   if (options.runner && options.runner !== "open-deep-research" && options.runner !== "stub") {
     throw new Error("--runner must be open-deep-research or stub");
@@ -2390,9 +2468,31 @@ function deepResearchSubmitOptions(options: {
     maxConcurrentResearchUnits: options.maxConcurrentResearchUnits,
     maxResearcherIterations: options.maxResearcherIterations,
     maxReactToolCalls: options.maxReactToolCalls,
+    forceRefresh: options.forceRefresh || undefined,
   };
   const cleaned = Object.fromEntries(Object.entries(result).filter(([, value]) => value !== undefined)) as DeepResearchSubmitOptions;
   return Object.keys(cleaned).length ? cleaned : undefined;
+}
+
+function deepResearchMetadata(input: {
+  metadata?: Record<string, unknown>;
+  companyId?: string;
+  companyName?: string;
+  website?: string;
+  cacheDir?: string;
+}): Record<string, unknown> | undefined {
+  const metadata: Record<string, unknown> = { ...(input.metadata ?? {}) };
+  if (input.companyId) {
+    metadata.company_id = input.companyId;
+    metadata.deepresearch_cache_dir = deepResearchCompanyCacheDir(input.companyId, input.cacheDir ?? resolveFirecrawlCacheDir());
+  }
+  if (input.companyName) metadata.company_name = input.companyName;
+  if (input.website) metadata.website = input.website;
+  return Object.keys(metadata).length ? metadata : undefined;
+}
+
+function deepResearchCompanyCacheDir(companyId: string, cacheRoot: string): string {
+  return path.resolve(cacheRoot, safeName(companyId), "deepresearch");
 }
 
 function buildListDeepResearchPrompt(

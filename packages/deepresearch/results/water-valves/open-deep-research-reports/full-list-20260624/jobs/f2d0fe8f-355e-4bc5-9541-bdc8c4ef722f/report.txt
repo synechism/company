@@ -1,0 +1,281 @@
+```json
+{
+  "company": "Conbraco Industries (dba Apollo Flow Controls / Aalberts IPS Americas)",
+  "fit_score": 5,
+  "fit_reason": "Exceptional fit for Cronwell's procurement automation platform. Conbraco/Apollo has a high-mix manufacturing environment (30,000 valves shipped daily, over 4,600 SKUs), complex vertical integration (own foundries, casting, machining, assembly), and multiple recent trigger events including a major facility expansion ($100M+ investment) and aggressive Aalberts growth targets (double North American business by 2030). The company directly serves data centers, a key Cronwell vertical. The recommended contact (VP Supply Chain at Aalberts IPS Americas level) has high-leverage for a procurement automation pitch.",
+  "manufacturing_profile": "Conbraco Industries, operating as Apollo Flow Controls and part of Aalberts integrated piping systems (IPS) Americas, is a vertically integrated manufacturer of over 30,000 valves per day across 4,600+ SKUs. Products include ball valves (bronze, brass, carbon steel, stainless steel, Alloy 20, Hastelloy C, Monel, Nickel, Titanium), butterfly valves, gate/globe/check valves, pressure relief valves (ASME Section I, IV, VIII), backflow preventers, plumbing & heating products (strainers, mixing valves, pressure reducing valves, water gauges), actuators (electric, pneumatic), and press systems (Apollo PowerPress carbon-steel, Apollo Press copper, Apollo SmartPress stainless-steel). The company operates three state-of-the-art manufacturing facilities in the Carolinas (Pageland SC with two world-class foundries, plus Conway/Myrtle Beach SC), all ISO 9001:2008 certified. They cast 11 metal alloys in-house and fabricate '95 to 98% of all components' internally from raw material through final assembly and testing. Manufacturing complexity is very high: custom/engineered alloys, high-mix production, lean manufacturing practices, and specialty products for data centers, oil & gas, petrochemical, pharmaceutical, food & beverage, and defense. Aalberts IPS globally has over 3,500 mission critical employees across 30 locations in 14 countries.",
+  "recent_triggers": [
+    {
+      "trigger": "Major investment to establish Apollo PowerPress manufacturing at Pageland SC facility, creating a global hub, with first US-made products expected early 2027 (phased through 2027)",
+      "date": "2026-04",
+      "why_it_matters": "Direct signal of manufacturing expansion, increased supplier base for raw materials & components, new production lines requiring procurement support. The company stated this 'directly supports Aalberts' global ambition to double our North American business by 2030.' This means procurement complexity and spend will grow significantly.",
+      "source_url": "https://hvacinsider.com/aalberts-brings-apollo-powerpress-manufacturing-to-the-united-states/"
+    },
+    {
+      "trigger": "Aalberts N.V. Annual Report 2025 published Feb 2026, highlighting organic growth in data centers, aerospace, power generation, defense; acquisitions of Paulo, Geo-Flo, GVT expanded American reach",
+      "date": "2026-02",
+      "why_it_matters": "M&A integration (Paulo, Geo-Flo, GVT) creates procurement consolidation opportunities. Growing data center vertical directly aligns with Cronwell's sweet spot. CEO stated ambition to double North American business by 2030, indicating aggressive scaling.",
+      "source_url": "https://aalberts.com/progress/annual-report-2025-published"
+    },
+    {
+      "trigger": "Launch of new Apollo 76F-HCA stainless steel ball valve (June 2026), developed from a custom data center customer request, engineered and manufactured in Conway SC",
+      "date": "2026-06",
+      "why_it_matters": "Demonstrates rapid custom product development cycle and responsiveness to data center demand. Custom-engineered parts require complex supplier coordination for raw materials (316 SS investment castings) — a procurement automation use case.",
+      "source_url": "https://aalberts-ips.us/newsroom/apollo-76f-hca-stainless-steel-solution-designed-for-corrosive-environments/"
+    },
+    {
+      "trigger": "Completed Stainless Steel Ball Conversion Project (July 2025, announced March 2026): standardized all brass/bronze ball valves to 316 SS balls, consolidating SKUs across Pageland SC production",
+      "date": "2026-03",
+      "why_it_matters": "Major SKU consolidation project reduces procurement complexity but also signals willingness to standardize and automate component sourcing. The engineering/procurement team managed a portfolio-wide change, a good entry point for automation tools.",
+      "source_url": "https://aalberts-ips.us/newsroom/standardizing-stainless-steel-apollo-ball-valves/"
+    },
+    {
+      "trigger": "Aalberts N.V. rejoined the AEX Index (major Dutch stock index) in 2026",
+      "date": "2026",
+      "why_it_matters": "Increased investor scrutiny and public company governance. Likely driving operational efficiency improvements and cost controls (including procurement automation). The parent company is publicly traded and focused on margin improvement.",
+      "source_url": "https://aalberts-ips.us/"
+    },
+    {
+      "trigger": "Aalberts IPS Americas showcased data center and HVAC solutions at AHR Expo 2025 (Orlando) and AHR Expo 2026 (Las Vegas), highlighting integrated portfolio for data centers",
+      "date": "2026-02",
+      "why_it_matters": "Confirmed strategic push into data center sector with Apollo Press, PowerPress, SmartPress, Shurjoint grooved couplings, ball/butterfly valves for chilled water/condenser water systems. Data center customers expect fast lead times and reliable supply chains.",
+      "source_url": "https://plumbingperspective.com/aalberts-integrated-piping-systems-at-ahr-expo-2026/"
+    },
+    {
+      "trigger": "Behind-the-scenes facility tour video (June 2025) at Conway SC facility with Plant Manager James Sturgeon highlighting vertical integration, in-house chemistry testing, and growing customer requests for unique installation solutions",
+      "date": "2025-06",
+      "why_it_matters": "Confirms complex, vertically integrated manufacturing with long-tenured workforce. Plant manager mentions keeping physical samples of chemistry heats 'forever' — indicates meticulous quality/documentation processes that procurement automation could support.",
+      "source_url": "https://www.youtube.com/watch?v=2UBu9l2c_jA"
+    },
+    {
+      "trigger": "Aalberts IPS Americas community impact day (May 2026) across Pageland, Conway, and Charlotte facilities, indicating company culture and community investment",
+      "date": "2026-05",
+      "why_it_matters": "Shows stable, community-embedded operations with likely long-tenured procurement and operations teams.",
+      "source_url": "https://aalberts-ips.us/"
+    }
+  ],
+  "recommended_contact": {
+    "name": "Unknown (not publicly identified)",
+    "title": "VP/Director of Supply Chain, Aalberts IPS Americas (based at Charlotte HQ or Pageland/Conway)",
+    "email": "Not publicly available",
+    "linkedin_url": "Not identified",
+    "why_this_person": "The recommended contact is the most senior procurement/supply chain executive at Aalberts IPS Americas. This role would oversee all raw material sourcing for three South Carolina foundries/manufacturing plants (casting alloys, machining components, seals, actuators, press fittings), plus manage supplier bases for the broader Aalberts IPS North American portfolio (Shurjoint, Paulo, Geo-Flo). The Pageland expansion and SKU standardization project make this role the highest-leverage buyer for a procurement-automation pitch. If this role cannot be identified via LinkedIn or company intros, the Plant Manager of the Pageland facility (managing the PowerPress expansion) or James Sturgeon (Plant Manager, Conway, featured in the facility tour) would be strong secondary targets. The Operations Supervisor at the Consumer Products Warehouse in Marshville, NC (provided lead) is too narrowly scoped on consumer/warehouse operations and does not have enterprise procurement authority. Override is warranted.",
+    "override_reason": "The provided lead (Operations Supervisor at Consumer Products Warehouse, Marshville NC) manages a warehouse for consumer products — not procurement across the manufacturing footprint. The best buyer is a VP/Director of Supply Chain or Procurement at the Aalberts IPS Americas level (Charlotte HQ oversees all Carolinas plants) who manages raw material sourcing for three foundries, thousands of SKUs, and the Pageland PowerPress expansion."
+  },
+  "org_chart": [
+    {
+      "name": "Jacob Speight",
+      "title": "CEO, Aalberts IPS Americas",
+      "function": "executive",
+      "reports_to": "Aalberts N.V. Group Management / Building Segment Head",
+      "relationship_basis": "Directly sourced from company press releases (HVAC Insider, Aalberts IPS US newsroom). Jacob Speight is the quoted executive for all major North America announcements including the Pageland PowerPress expansion.",
+      "source_url": "https://hvacinsider.com/aalberts-brings-apollo-powerpress-manufacturing-to-the-united-states/",
+      "confidence": "high"
+    },
+    {
+      "name": "Glenn Mosack (likely retired or no longer President — post-acquisition transition)",
+      "title": "Former President, Conbraco Industries (at acquisition in 2010)",
+      "function": "executive",
+      "reports_to": "Jacob Speight / Aalberts IPS Americas (historical)",
+      "relationship_basis": "Mentioned in multiple acquisition-era articles (Supply House Times, Plumbing & Mechanical 2010). Quoted as saying '95 to 98% of components made in Carolinas.' Likely no longer in a leadership role given the 2010 acquisition and full integration as Aalberts IPS Americas.",
+      "source_url": "https://www.supplyht.com/articles/94816-apollo-valves-sold-to-aalberts",
+      "confidence": "medium"
+    },
+    {
+      "name": "James Sturgeon",
+      "title": "Plant Manager, Conway/Myrtle Beach SC Facility",
+      "function": "operations",
+      "reports_to": "VP Operations, Aalberts IPS Americas (inferred)",
+      "relationship_basis": "Directly sourced from Aalberts IPS Americas YouTube facility tour video (June 2025). Introduced as Plant Manager of the Conway/Myrtle Beach facility.",
+      "source_url": "https://www.youtube.com/watch?v=2UBu9l2c_jA",
+      "confidence": "high"
+    },
+    {
+      "name": "Brian Ragone",
+      "title": "Senior VP of Sales and Marketing, Apollo Valves",
+      "function": "executive",
+      "reports_to": "Jacob Speight (inferred)",
+      "relationship_basis": "Mentioned in Supply House Times article ('Brian Ragone named Apollo Valves senior VP of sales and marketing'). Also referenced in Aalberts IPS Americas newsroom as contact for media inquiries in some releases.",
+      "source_url": "https://www.supplyht.com/articles/94816-apollo-valves-sold-to-aalberts",
+      "confidence": "medium"
+    },
+    {
+      "name": "Unknown",
+      "title": "VP/Director of Supply Chain, Aalberts IPS Americas",
+      "function": "supply_chain",
+      "reports_to": "Jacob Speight (inferred — standard structure for a business unit CEO)",
+      "relationship_basis": "Role inferred from company size (3,500+ employees globally, 3 manufacturing plants in Carolinas, vertical integration requiring extensive raw material procurement). No public name found. Most critical role for Cronwell outreach. Likely located at Charlotte HQ (10715 Sikes Place, Suite 200, Charlotte, NC 28277) or Pageland.",
+      "source_url": "Not publicly identified",
+      "confidence": "low"
+    },
+    {
+      "name": "Unknown",
+      "title": "Plant Manager, Pageland SC Facilities (two foundries + PowerPress expansion area)",
+      "function": "manufacturing",
+      "reports_to": "VP Operations, Aalberts IPS Americas (inferred)",
+      "relationship_basis": "Role inferred from company descriptions of 'two world-class foundries in Pageland' and the PowerPress expansion announcement. No public name found. This person manages the new PowerPress production line buildout.",
+      "source_url": "https://hvacinsider.com/aalberts-brings-apollo-powerpress-manufacturing-to-the-united-states/",
+      "confidence": "low"
+    },
+    {
+      "name": "Unknown",
+      "title": "VP/Head of Engineering (Product Development & Custom Solutions)",
+      "function": "engineering",
+      "reports_to": "Jacob Speight (inferred)",
+      "relationship_basis": "Role inferred from product development (76F-HCA valve created from custom data center request) and 'in-house engineers' language in press releases. Engineering team is involved in custom alloy and configuration requests.",
+      "source_url": "https://aalberts-ips.us/newsroom/apollo-76f-hca-stainless-steel-solution-designed-for-corrosive-environments/",
+      "confidence": "low"
+    },
+    {
+      "name": "Unknown",
+      "title": "CFO, Aalberts IPS Americas",
+      "function": "finance",
+      "reports_to": "Aalberts N.V. Group CFO / CEO of IPS Americas (inferred)",
+      "relationship_basis": "Role inferred from public company structure. Aalberts N.V. is publicly traded (AEX Index), requiring strong financial controls at regional level. No name found in press releases specific to North America.",
+      "source_url": "Not publicly identified",
+      "confidence": "low"
+    }
+  ],
+  "outreach_angle": "Cronwell can position itself as a procurement automation partner specifically for Aalberts' 2030 North America doubling strategy. The Pageland PowerPress expansion (phased through 2027, first US-made products early 2027) means new production lines, new supplier relationships for specialized press fittings raw materials, and a need to manage procurement complexity efficiently. The SKU standardization project (316 SS ball conversion across brass/bronze valves) shows the company is already thinking about procurement simplification — Cronwell can extend this to automated supplier matching, RFQ generation, and order management across the diverse metal alloys, castings, and components sourced for 30,000 valves per day and three foundries. Reference specific ongoing work: the new 76F-HCA stainless steel ball valve (June 2026) was developed from a data center customer custom request, demonstrating the need for agile procurement of specialized materials (316 SS investment castings, RPTFE seats). Cronwell can say: 'We help engineering-intensive valve manufacturers like Apollo reduce custom-supplier sourcing time by 40% and consolidate fragmented supplier bases during expansion phases.' Target the VP Supply Chain at Charlotte HQ, referencing the Pageland investment, the data center push, and the desire to 'double North American business by 2030' — procurement automation is a direct lever for that goal.",
+  "open_questions": [
+    "Who is the VP/Director of Supply Chain or Procurement at Aalberts IPS Americas? This is the highest-leverage contact but not publicly named. Likely based at 10715 Sikes Place, Suite 200, Charlotte, NC 28277.",
+    "What ERP/MRP system does Conbraco/Apollo use? The company has been vertically integrated since before 2010 and has likely undergone IT modernization within Aalberts. Understanding their procurement tech stack is key to positioning an automation agent.",
+    "Does Conbraco have a dedicated strategic sourcing team separate from plant-level purchasing? Vertical integration means some sourcing is captive (foundries supply machining), but external spend on alloys, seals, actuators, press fittings, and packaging is likely significant.",
+    "What is the dollar volume of external procurement spend annually? With ~$200M revenue at acquisition in 2010 (likely higher now given growth + acquisitions) and 95-98% vertical integration, external spend might be $20-40M — still meaningful for automation ROI.",
+    "Is there a shared services procurement function at Aalberts N.V. level (Netherlands) that influences North American buying, or is procurement fully decentralized to Aalberts IPS Americas? This affects who the real decision-maker is.",
+    "What is the relationship between the Consumer Products Warehouse (Marshville NC) lead and the broader manufacturing procurement team? The provided lead may have useful internal connections but is not a procurement decision-maker."
+  ],
+  "sources": [
+    {
+      "title": "Aalberts N.V. – Acquisition Conbraco Industries in America",
+      "url": "https://aalberts.com/progress/aalberts-industries-strengthens-market-position-flow-control-in-north-america",
+      "date": "2010-06-02"
+    },
+    {
+      "title": "DS Pipe & Steel Supply – Conbraco Industries Inc. Profile",
+      "url": "https://www.dspipe.com/manufacturers/conbraco-industries-inc/",
+      "date": "unknown"
+    },
+    {
+      "title": "Aalberts IPS US – Homepage",
+      "url": "https://aalberts-ips.us/",
+      "date": "2026-06-24"
+    },
+    {
+      "title": "Supply House Times – Apollo Valves Sold to Aalberts",
+      "url": "https://www.supplyht.com/articles/94816-apollo-valves-sold-to-aalberts",
+      "date": "2010-06-03"
+    },
+    {
+      "title": "Aalberts IPS US – Products: Apollo Valves",
+      "url": "https://aalberts-ips.us/products/apollo-valves/",
+      "date": "unknown"
+    },
+    {
+      "title": "Aalberts IPS US – About Us",
+      "url": "https://aalberts-ips.us/about-us/",
+      "date": "unknown"
+    },
+    {
+      "title": "HVAC Insider – Aalberts Brings Apollo PowerPress Manufacturing to the United States",
+      "url": "https://hvacinsider.com/aalberts-brings-apollo-powerpress-manufacturing-to-the-united-states/",
+      "date": "2026-04-15"
+    },
+    {
+      "title": "Aalberts IPS US – Newsroom: Standardizing on 316 Stainless Steel Ball Valves",
+      "url": "https://aalberts-ips.us/newsroom/standardizing-stainless-steel-apollo-ball-valves/",
+      "date": "2026-03-26"
+    },
+    {
+      "title": "Aalberts IPS US – Newsroom: Apollo 76F-HCA Stainless Steel Solution",
+      "url": "https://aalberts-ips.us/newsroom/apollo-76f-hca-stainless-steel-solution-designed-for-corrosive-environments/",
+      "date": "2026-06-01"
+    },
+    {
+      "title": "Aalberts.com – Annual Report 2025 Published",
+      "url": "https://aalberts.com/progress/annual-report-2025-published",
+      "date": "2026-02-26"
+    },
+    {
+      "title": "Aalberts.com – Annual Report 2024 Published",
+      "url": "https://aalberts.com/progress/annual-report-2024",
+      "date": "2025-02-27"
+    },
+    {
+      "title": "Plumbing Perspective – Aalberts at AHR Expo 2026",
+      "url": "https://plumbingperspective.com/aalberts-integrated-piping-systems-at-ahr-expo-2026/",
+      "date": "2026-01-15"
+    },
+    {
+      "title": "HVAC Insider – Aalberts to Showcase at AHR Expo 2025",
+      "url": "https://hvacinsider.com/aalberts-integrated-piping-systems-to-showcase-advanced-data-center-and-hvac-solutions-at-ahr-expo-2025/",
+      "date": "2024-12-03"
+    },
+    {
+      "title": "YouTube – Behind the Scenes at Aalberts IPS Americas (Conway SC Facility Tour)",
+      "url": "https://www.youtube.com/watch?v=2UBu9l2c_jA",
+      "date": "2025-06-10"
+    },
+    {
+      "title": "Plumbing & Mechanical – Apollo Valves Sold to Aalberts",
+      "url": "https://www.pmmag.com/articles/93837-apollo-valves-sold-to-aalberts",
+      "date": "2010-06-03"
+    },
+    {
+      "title": "Plumbing & Mechanical – Aalberts Brings Apollo PowerPress to US",
+      "url": "https://www.pmmag.com/articles/107179-aalberts-brings-apollo-powerpress-manufacturing-to-the-united-states",
+      "date": "2026-02-05"
+    },
+    {
+      "title": "phcppros – Aalberts Brings Apollo PowerPress Manufacturing to US",
+      "url": "https://www.phcppros.com/articles/22722-aalberts-brings-apollo-powerpress-manufacturing-to-us",
+      "date": "2026-01-07"
+    },
+    {
+      "title": "ASPE Pipeline – Introducing New Apollo 76F-HCA Ball Valve",
+      "url": "https://aspe.org/pipeline/introducing-the-new-apollo-76f-hca-stainless-steel-ball-valve/",
+      "date": "2026-06-02"
+    },
+    {
+      "title": "Industrial Valve News – Aalberts IPS Introduces Apollo 76F-HCA",
+      "url": "https://www.industrialvalvenews.com/featured/aalberts-ips-introduces-apollo-76f-hca-stainless-steel-valve/",
+      "date": "2026-06"
+    },
+    {
+      "title": "M&M Control – Conbraco Commercial Products Catalog CPCA9000",
+      "url": "https://www.mmcontrol.com/apollovalves/pdfs/cat_CPCA9000.pdf",
+      "date": "unknown"
+    },
+    {
+      "title": "Aalberts IPS US – Commercial Products Catalog CPCA9000",
+      "url": "https://aalberts-ips.us/wp-content/uploads/2022/02/CPCA9000.pdf",
+      "date": "unknown"
+    },
+    {
+      "title": "NASVI – Conbraco Safety & Relief Valve Catalog",
+      "url": "https://nasvi.com/wp-content/uploads/2020/12/SRV-CATALOG-1.pdf",
+      "date": "unknown"
+    },
+    {
+      "title": "IQS Directory – Apollo Valves Profile",
+      "url": "https://www.iqsdirectory.com/profile/apollo-valves-56967/",
+      "date": "unknown"
+    },
+    {
+      "title": "MKS Pipe & Valve – Apollo Valves Company Profile",
+      "url": "https://www.mkspvf.com/apollo-valves",
+      "date": "unknown"
+    },
+    {
+      "title": "VisualVisitor – Apollo Valves Company Profile",
+      "url": "https://www.visualvisitor.com/companies/1701142/apollo_valves_manufactured_by_conbraco_industries",
+      "date": "unknown"
+    },
+    {
+      "title": "Aalberts IPS US – Contact Page",
+      "url": "https://aalberts-ips.us/contact/",
+      "date": "unknown"
+    }
+  ]
+}
+```

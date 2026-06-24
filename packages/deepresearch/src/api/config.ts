@@ -13,6 +13,7 @@ export type DeepResearchApiConfig = {
   queueName: string;
   workerConcurrency: number;
   resultsDir: string;
+  companyCacheRoot: string;
   defaultRunner: DeepResearchRunner;
   openDeepResearchDir: string;
 };
@@ -25,6 +26,7 @@ export function loadDeepResearchApiConfig(): DeepResearchApiConfig {
     queueName: process.env.DEEPRESEARCH_QUEUE || "fcdx-deepresearch",
     workerConcurrency: parseIntEnv("DEEPRESEARCH_WORKER_CONCURRENCY", process.env.DEEPRESEARCH_WORKER_CONCURRENCY, 1),
     resultsDir: path.resolve(process.env.DEEPRESEARCH_RESULTS_DIR || path.join(packageRoot, "results", "jobs")),
+    companyCacheRoot: path.resolve(process.env.DEEPRESEARCH_COMPANY_CACHE_ROOT || "output/cache/firecrawl"),
     defaultRunner: parseRunner(process.env.DEEPRESEARCH_RUNNER || "open-deep-research"),
     openDeepResearchDir: path.resolve(
       process.env.OPEN_DEEP_RESEARCH_DIR || path.join(packageRoot, "external", "open_deep_research"),
