@@ -1,0 +1,299 @@
+{
+  "company": "Kennedy Valve Company",
+  "fit_score": 5,
+  "fit_reason": "Kennedy Valve is an excellent prospect for Cronwell. It is a large, complex manufacturer (501-1000 employees, 500,000+ sq ft foundry/machining/assembly plant in Elmira, NY, plus a facility in Abu Dhabi) with a vast product catalog of fire hydrants, valves, and flow-control products. The company has significant supply chain complexity with many SKUs, engineered parts, and recent new product launches (iHydrant Plus, ALPHA Restrained Joint). It is part of a larger, family-owned conglomerate (McWane, Inc.) that has been actively acquiring companies (Ditech Testing 2024, Tri-Seal Valve Line). The outreach is further justified by the recent appointment of a new company President (Will McWane, Jan 2026) and the fact that the supply chain director is publicly identified and reachable, with a potential need to modernize procurement workflows.",
+  "manufacturing_profile": "Kennedy Valve is a gray and ductile iron foundry and computerized machining and assembly company. Its primary manufacturing facility in Elmira, NY (1021 E. Water Street) spans 52.59 acres with over 500,000 sq ft of plant space. It houses a sophisticated foundry, numerous CNC automatic machining facilities, and assembly operations. The company has invested over $40 million in capital improvements over the last 25 years, including a closed-loop water-cooling system and acid scrubber. A second manufacturing/assembly facility in Abu Dhabi (McWane Gulf, established 2015) serves the Middle East, Africa, and Asia. Products include fire hydrants (e.g., Guardian, iHydrant), gate valves (resilient seated, rotating disc, metal seated), butterfly valves, check valves (swing, KEN-FLEX), eccentric plug valves, UL-FM fire protection valves, and in-plant valves. The product line breadth is extensive with many SKU variations, engineered-to-order configurations (actuators, coatings), and complex specification compliance (AWWA, UL, FM, NSF, ISO). The company's products are used in waterworks, fire protection, and industrial flow-control applications.",
+  "recent_triggers": [
+    {
+      "trigger": "Will McWane named President of parent company McWane, Inc. (fifth generation of family leadership)",
+      "date": "2026-01",
+      "why_it_matters": "New leadership at the parent level often signals strategic shifts, including potential focus on operational efficiency, supply chain modernization, and digital transformation across portfolio companies like Kennedy Valve.",
+      "source_url": "https://www.mcwane.com/communications/news/releases/will-mcwane-named-president-as-fifth-generation-of-family-owned-company/"
+    },
+    {
+      "trigger": "McWane Plant & Industrial acquired the Tri-Seal Valve product line",
+      "date": "2024",
+      "why_it_matters": "Acquisition of a new product line (high-performance butterfly valves) expands the product portfolio and likely adds supply chain complexity (new suppliers, materials, SKUs) that could benefit from procurement automation.",
+      "source_url": "https://www.mcwanepoles.com/about/press-releases/mcwane-plant-industrial-acquires-tri-seal-valve-line-2/"
+    },
+    {
+      "trigger": "McWane acquired Ditech Testing (Canadian tank refurbishment company)",
+      "date": "2024",
+      "why_it_matters": "Continued M&A activity by McWane suggests a growth-oriented corporate strategy, which often creates internal pressure to standardize and automate procurement processes across newly integrated entities.",
+      "source_url": "https://mcwane.com/upl/downloads/catalog/products/kennedy-valves-product-range-guide-c2a2411e.pdf"
+    },
+    {
+      "trigger": "Launch of iHydrant Plus™ – enhanced system intelligence for hydrants",
+      "date": "2024",
+      "why_it_matters": "New product introduction with monitoring technology likely involves new electronic components, sensors, and supply chain partners, increasing procurement complexity.",
+      "source_url": "https://www.kennedyvalve.com/products/ihydrant/"
+    },
+    {
+      "trigger": "Launch of ALPHA™ Restrained Joint on hydrants and valves",
+      "date": "2024",
+      "why_it_matters": "Addition of a new joint technology means new castings, machining, and sourcing of restraining components, adding SKU complexity and potential supplier management needs.",
+      "source_url": "https://www.kennedyvalve.com/products/hydrants/"
+    },
+    {
+      "trigger": "ISO 9001:2015 and ISO 14001:2015 certifications maintained; Certificates of Compliance issued (June 2024)",
+      "date": "2024-06",
+      "why_it_matters": "Maintaining these certifications demonstrates a formal quality and environmental management system. Automation of procurement workflows can help maintain compliance documentation and supplier quality tracking.",
+      "source_url": "https://www.kennedyvalve.com/upl/downloads/kenn/products/documents/certificate-c509-ks-fw-8000-series-2-12.pdf"
+    },
+    {
+      "trigger": "Active hiring for production and engineering roles (Chipper/Grinder, Production Process Intern)",
+      "date": "2026-06",
+      "why_it_matters": "Recent job postings suggest ongoing or increased production activity, indicating that the plant is operating at a scale where procurement automation could improve efficiency.",
+      "source_url": "https://www.linkedin.com/jobs/view/kennedy-valve-chipper-grinder-at-kennedy-valve-company-4417771135"
+    }
+  ],
+  "recommended_contact": {
+    "name": "Chris McCutcheon, CMRP",
+    "title": "Director, Supply Chain",
+    "email": "chris.mccutcheon@kennedyvalve.com",
+    "linkedin_url": "https://www.linkedin.com/in/chris-mccutcheon-cmrp-04973865",
+    "why_this_person": "Chris McCutcheon is confirmed as the Director of Supply Chain at Kennedy Valve across multiple sources (LinkedIn, RocketReach, Datanyze). This role is the most relevant decision-maker for procurement workflow automation. His CMRP (Certified Maintenance & Reliability Professional) credential also signals a focus on operational efficiency and reliability, making him a natural buyer for automation solutions."
+  },
+  "org_chart": [
+    {
+      "name": "C. Phillip McWane",
+      "title": "Chairman, McWane, Inc.",
+      "function": "parent_company",
+      "reports_to": "Board of Directors / McWane Family",
+      "relationship_basis": "Directly sourced from McWane leadership page and Hall of Fame profile.",
+      "source_url": "https://www.mcwane.com/about/leadership/",
+      "confidence": "high"
+    },
+    {
+      "name": "Will McWane",
+      "title": "President, McWane, Inc.",
+      "function": "parent_company",
+      "reports_to": "C. Phillip McWane (Chairman)",
+      "relationship_basis": "Directly sourced from McWane press release (Jan 2026).",
+      "source_url": "https://www.mcwane.com/communications/news/releases/will-mcwane-named-president-as-fifth-generation-of-family-owned-company/",
+      "confidence": "high"
+    },
+    {
+      "name": "Kevin Bense",
+      "title": "Group President, Waterworks (McWane) / Exec VP, Manchester Tank",
+      "function": "parent_company",
+      "reports_to": "Will McWane (President, McWane Inc.)",
+      "relationship_basis": "Directly sourced from Kennedy Valve executive team page and McWane leadership page.",
+      "source_url": "https://www.kennedyvalve.com/about/executive-team/",
+      "confidence": "high"
+    },
+    {
+      "name": "Nathan Pizzini",
+      "title": "Vice President / General Manager, Kennedy Valve",
+      "function": "executive",
+      "reports_to": "Kevin Bense (Group President, Waterworks)",
+      "relationship_basis": "Directly sourced from Kennedy Valve executive team page.",
+      "source_url": "https://www.kennedyvalve.com/about/executive-team/",
+      "confidence": "high"
+    },
+    {
+      "name": "Tommy Braxton",
+      "title": "Vice President of Sales and Marketing, Kennedy Valve",
+      "function": "executive",
+      "reports_to": "Nathan Pizzini (VP/GM, Kennedy Valve)",
+      "relationship_basis": "Directly sourced from Kennedy Valve executive team page.",
+      "source_url": "https://www.kennedyvalve.com/about/executive-team/",
+      "confidence": "high"
+    },
+    {
+      "name": "Karie Magliocca",
+      "title": "Controller, Kennedy Valve",
+      "function": "finance",
+      "reports_to": "Nathan Pizzini (VP/GM, Kennedy Valve) / Kevin Bense (Group President, Waterworks)",
+      "relationship_basis": "Directly sourced from Kennedy Valve executive team page.",
+      "source_url": "https://www.kennedyvalve.com/about/executive-team/",
+      "confidence": "high"
+    },
+    {
+      "name": "Elliot Baker",
+      "title": "Human Resources Director, Kennedy Valve",
+      "function": "other",
+      "reports_to": "Nathan Pizzini (VP/GM, Kennedy Valve)",
+      "relationship_basis": "Directly sourced from Kennedy Valve executive team page.",
+      "source_url": "https://www.kennedyvalve.com/about/executive-team/",
+      "confidence": "high"
+    },
+    {
+      "name": "Chris McCutcheon, CMRP",
+      "title": "Director, Supply Chain",
+      "function": "supply_chain",
+      "reports_to": "Nathan Pizzini (VP/GM, Kennedy Valve)",
+      "relationship_basis": "Directly sourced from LinkedIn profile, RocketReach, Datanyze. Role confirmed as Director, Supply Chain.",
+      "source_url": "https://www.linkedin.com/in/chris-mccutcheon-cmrp-04973865",
+      "confidence": "high"
+    },
+    {
+      "name": "Daniel Burczynski",
+      "title": "Manager, Engineering",
+      "function": "engineering",
+      "reports_to": "Paul Kennedy (Manager, Product Engineering), ultimately Nathan Pizzini",
+      "relationship_basis": "Directly sourced as signatory on Certificates of Compliance from Kennedy Valve (2024).",
+      "source_url": "https://www.kennedyvalve.com/upl/downloads/kenn/products/documents/certificate-c509-ks-fw-8000-series-2-12.pdf",
+      "confidence": "high"
+    },
+    {
+      "name": "Paul Kennedy",
+      "title": "Manager, Product Engineering",
+      "function": "engineering",
+      "reports_to": "Nathan Pizzini (VP/GM)",
+      "relationship_basis": "Inferred from Datanyze management list.",
+      "source_url": "https://www.datanyze.com/companies/kennedy-valve/21315880",
+      "confidence": "medium"
+    },
+    {
+      "name": "Spencer Ortell",
+      "title": "Manager, Manufacturing Engineering",
+      "function": "manufacturing",
+      "reports_to": "Nathan Pizzini (VP/GM)",
+      "relationship_basis": "Inferred from Datanyze management list.",
+      "source_url": "https://www.datanyze.com/companies/kennedy-valve/21315880",
+      "confidence": "medium"
+    },
+    {
+      "name": "Calvin Mayo",
+      "title": "Manager, Value Stream",
+      "function": "operations",
+      "reports_to": "Nathan Pizzini (VP/GM)",
+      "relationship_basis": "Inferred from Datanyze management list.",
+      "source_url": "https://www.datanyze.com/companies/kennedy-valve/21315880",
+      "confidence": "medium"
+    },
+    {
+      "name": "Kent Brown",
+      "title": "Global Manager, Fire Protection Market",
+      "function": "executive",
+      "reports_to": "Tommy Braxton (VP of Sales and Marketing)",
+      "relationship_basis": "Inferred from Datanyze management list.",
+      "source_url": "https://www.datanyze.com/companies/kennedy-valve/21315880",
+      "confidence": "medium"
+    },
+    {
+      "name": "Greg Davis",
+      "title": "National Sales Manager, Kennedy Valve & M&H Valve",
+      "function": "executive",
+      "reports_to": "Tommy Braxton (VP of Sales and Marketing)",
+      "relationship_basis": "Directly sourced from Kennedy Valve executive team page.",
+      "source_url": "https://www.kennedyvalve.com/about/executive-team/",
+      "confidence": "high"
+    }
+  ],
+  "outreach_angle": "Given Kennedy Valve's status as one of the largest valve and hydrant manufacturing facilities in the U.S., with a 500,000+ sq ft foundry and machining operation, a broad product catalog spanning hydrants, gate valves, check valves, butterfly valves, plug valves, and the recently launched iHydrant Plus monitoring system, the supply chain is inherently complex. The company also recently added new product lines (Tri-Seal acquisition by parent McWane, ALPHA Restrained Joint), which likely introduced new suppliers and SKUs. With a new McWane Group President (Kevin Bense) and a recent fifth-generation family leadership transition (Will McWane as President), there is a corporate focus on modernization and efficiency. Cronwell should craft a message referencing the complexity of managing procurement across a sprawling product line with castings, elastomers, electronics, and coatings, and offer to discuss how AI agents can streamline supplier communication, automate RFQ/RFP processes, and reduce lead times—freeing up Chris McCutcheon's team to focus on strategic sourcing and new product integration rather than manual transactional work.",
+  "open_questions": [
+    "What ERP system does Kennedy Valve use? (e.g., SAP, Oracle, JDE, Microsoft Dynamics) This will affect integration feasibility.",
+    "Does Kennedy Valve currently use any procurement automation or e-procurement tools?",
+    "How many active suppliers does Kennedy Valve manage, and what is the annual spend on direct materials (castings, coatings, elastomers, electronics)?",
+    "What is the approximate number of SKUs or active part numbers managed by the procurement team?",
+    "Is there a dedicated procurement/purchasing manager under Chris McCutcheon, or does he handle all strategic sourcing personally?",
+    "Has Kennedy Valve recently experienced any significant supply chain disruptions (e.g., raw material shortages, logistics issues) that created urgency for improvement?",
+    "What is the role of the McWane corporate procurement team versus the Kennedy Valve procurement team? Is there centralized or decentralized purchasing?",
+    "Does the Elmira plant operate on a lean/kanban system, and how are procurement workflows tied to production scheduling?",
+    "Are there any public financials or bond filings for McWane that might reveal investment in digital transformation or supply chain technology?"
+  ],
+  "sources": [
+    {
+      "title": "Kennedy Valve Company Homepage",
+      "url": "https://www.kennedyvalve.com/",
+      "date": "unknown"
+    },
+    {
+      "title": "Contact Us - Kennedy Valve",
+      "url": "https://www.kennedyvalve.com/contact-us/",
+      "date": "unknown"
+    },
+    {
+      "title": "Kennedy Valve Company | LinkedIn",
+      "url": "https://www.linkedin.com/company/kennedy-valve-company",
+      "date": "unknown"
+    },
+    {
+      "title": "Executive Team - Kennedy Valve",
+      "url": "https://www.kennedyvalve.com/about/executive-team/",
+      "date": "unknown"
+    },
+    {
+      "title": "Products - Kennedy Valve",
+      "url": "https://www.kennedyvalve.com/products",
+      "date": "unknown"
+    },
+    {
+      "title": "Hydrants - Kennedy Valve",
+      "url": "https://www.kennedyvalve.com/products/hydrants/",
+      "date": "unknown"
+    },
+    {
+      "title": "Company History - Kennedy Valve",
+      "url": "https://www.kennedyvalve.com/about/company-history/",
+      "date": "unknown"
+    },
+    {
+      "title": "Kennedy Valve Product Range Guide (McWane PDF)",
+      "url": "https://mcwane.com/upl/downloads/catalog/products/kennedy-valves-product-range-guide-c2a2411e.pdf",
+      "date": "unknown"
+    },
+    {
+      "title": "McWane Plant & Industrial Acquires Tri-Seal Valve Line",
+      "url": "https://www.mcwanepoles.com/about/press-releases/mcwane-plant-industrial-acquires-tri-seal-valve-line-2/",
+      "date": "2024"
+    },
+    {
+      "title": "Kennedy Valve — MPI (McWane Plant & Industrial)",
+      "url": "https://mcwanepi.com/brands/kennedy-valve/",
+      "date": "unknown"
+    },
+    {
+      "title": "Certificate of Compliance — C509 KS-FW (Kennedy Valve)",
+      "url": "https://www.kennedyvalve.com/upl/downloads/kenn/products/documents/certificate-c509-ks-fw-8000-series-2-12.pdf",
+      "date": "2024-06-27"
+    },
+    {
+      "title": "Certificate of Compliance — AWWA Swing Check Valves (Kennedy Valve)",
+      "url": "https://www.kennedyvalve.com/upl/downloads/content-blocks/coc-awwa-swing-check-valves.pdf",
+      "date": "2024-06-27"
+    },
+    {
+      "title": "iHydrant Products - Kennedy Valve",
+      "url": "https://www.kennedyvalve.com/products/ihydrant/",
+      "date": "unknown"
+    },
+    {
+      "title": "Chris McCutcheon, CMRP - Supply Chain Director - LinkedIn",
+      "url": "https://www.linkedin.com/in/chris-mccutcheon-cmrp-04973865",
+      "date": "unknown"
+    },
+    {
+      "title": "Kennedy Valve Company Profile | Management - Datanyze",
+      "url": "https://www.datanyze.com/companies/kennedy-valve/21315880",
+      "date": "unknown"
+    },
+    {
+      "title": "Leadership - McWane",
+      "url": "https://www.mcwane.com/about/leadership/",
+      "date": "unknown"
+    },
+    {
+      "title": "Will McWane Named President (McWane Press Release)",
+      "url": "https://www.mcwane.com/communications/news/releases/will-mcwane-named-president-as-fifth-generation-of-family-owned-company/",
+      "date": "2026-01-13"
+    },
+    {
+      "title": "History - McWane",
+      "url": "https://www.mcwane.com/about/history/",
+      "date": "unknown"
+    },
+    {
+      "title": "C. Phillip McWane – Alabama Business Hall of Fame",
+      "url": "https://abhof.culverhouse.ua.edu/member/c-phillip-mcwane/",
+      "date": "unknown"
+    },
+    {
+      "title": "Gate Valves - Kennedy Valve",
+      "url": "https://www.kennedyvalve.com/products/valves/",
+      "date": "unknown"
+    }
+  ]
+}

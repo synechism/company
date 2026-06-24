@@ -1,4 +1,4 @@
-# DeerFlow vs Fresh Codex Baseline
+# Deep Research Runner Comparison Notes
 
 ## Input
 
@@ -20,22 +20,13 @@ Saved report:
 
 - `codex-baseline-reports/kennedy-valve.json`
 
-## DeerFlow Result
+## Retired Runner
 
-DeerFlow is now installed and produced a Kennedy Valve report.
+A previous runner was tested and then removed from the repo as the active spike.
 
-- Source checkout: `packages/deepresearch/external/deer-flow`
-- `make check`: passed
-- `make install`: passed
-- `make doctor`: passed
-- Model: Claude Code OAuth provider via `ANTHROPIC_AUTH_TOKEN`
-- Search/fetch: Firecrawl
-- Embedded-client final response: `deerflow-reports/kennedy-valve.md`
-- Full generated artifact: `deerflow-reports/kennedy-valve-full.md`
+It was fast and found useful signals, but it repeatedly failed the core requirement for this workflow: reliable adherence to the requested output shape. In particular, the tracked Kennedy Valve run ignored the JSON-only schema and omitted the requested org chart despite explicit instructions.
 
-The first Jina-backed run failed because Jina returned 401. After switching DeerFlow's active search/fetch tools to Firecrawl, the run completed.
-
-The first Claude-backed run also exposed a DeerFlow/Anthropic compatibility issue: the dynamic-context middleware inserted non-consecutive `SystemMessage`s. For this local smoke test, the checkout was patched to emit that hidden context as a `HumanMessage`.
+The local checkout and generated report artifacts were removed. Future comparisons should use runner-specific folders such as `open-deep-research-reports/`.
 
 ## Current Takeaway
 
@@ -47,11 +38,32 @@ Fresh Codex baseline:
 - Returned closer to the requested JSON shape.
 - Found very actionable triggers, especially price-increase and material-planner signals.
 
-DeerFlow:
+Next runner to test:
 
-- Took about 95 seconds for the first successful summary run and about 134 seconds for the stricter run.
-- Produced a richer full Markdown artifact, including company history, product families, supply-chain categories, McWane ecosystem context, and outreach angle.
-- Did not reliably obey the requested JSON-only final response shape; the full artifact is better than the final chat response.
-- Required more setup and one local compatibility patch.
+- LangChain Open Deep Research.
+- Primary scoring criterion: instruction following and structured artifact reliability, not just report richness.
+- Required output: valid JSON with the requested fields, including `org_chart`.
 
-Current read: DeerFlow looks promising as a fast local deep-research harness once configured, especially if we consume its generated artifacts rather than the final chat response. Codex was slower but more directly compliant with the requested output schema.
+## LangChain Open Deep Research Result
+
+The Kennedy Valve smoke test completed successfully after local runner adjustments:
+
+- Added Firecrawl as a search backend.
+- Patched final-report instructions to obey the research brief's requested format instead of always forcing Markdown.
+- Patched structured-output calls to use function-calling mode.
+- Used DeepSeek through the OpenAI-compatible endpoint as `openai:deepseek-chat`.
+
+Saved files:
+
+- `open-deep-research-reports/kennedy-valve-output.txt`
+- `open-deep-research-reports/kennedy-valve-run.json`
+
+Result:
+
+- Runtime: about 213 seconds.
+- Output: valid JSON.
+- Included requested top-level keys, including `org_chart`.
+- `org_chart` contained 14 entries.
+- `sources` contained 20 entries.
+
+This is materially better than the previous runner for the core requirement: structured output adherence.

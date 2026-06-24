@@ -1,0 +1,195 @@
+diff --git a/src/open_deep_research/configuration.py b/src/open_deep_research/configuration.py
+index 1c5bac9..7433ed9 100644
+--- a/src/open_deep_research/configuration.py
++++ b/src/open_deep_research/configuration.py
+@@ -14,6 +14,7 @@ class SearchAPI(Enum):
+     ANTHROPIC = "anthropic"
+     OPENAI = "openai"
+     TAVILY = "tavily"
++    FIRECRAWL = "firecrawl"
+     NONE = "none"
+ 
+ class MCPConfig(BaseModel):
+@@ -84,6 +85,7 @@ class Configuration(BaseModel):
+                 "description": "Search API to use for research. NOTE: Make sure your Researcher Model supports the selected search API.",
+                 "options": [
+                     {"label": "Tavily", "value": SearchAPI.TAVILY.value},
++                    {"label": "Firecrawl", "value": SearchAPI.FIRECRAWL.value},
+                     {"label": "OpenAI Native Web Search", "value": SearchAPI.OPENAI.value},
+                     {"label": "Anthropic Native Web Search", "value": SearchAPI.ANTHROPIC.value},
+                     {"label": "None", "value": SearchAPI.NONE.value}
+@@ -249,4 +251,4 @@ class Configuration(BaseModel):
+     class Config:
+         """Pydantic configuration."""
+         
+-        arbitrary_types_allowed = True
+\ No newline at end of file
++        arbitrary_types_allowed = True
+diff --git a/src/open_deep_research/deep_researcher.py b/src/open_deep_research/deep_researcher.py
+index 279dbff..093bd29 100644
+--- a/src/open_deep_research/deep_researcher.py
++++ b/src/open_deep_research/deep_researcher.py
+@@ -88,7 +88,7 @@ async def clarify_with_user(state: AgentState, config: RunnableConfig) -> Comman
+     # Configure model with structured output and retry logic
+     clarification_model = (
+         configurable_model
+-        .with_structured_output(ClarifyWithUser)
++        .with_structured_output(ClarifyWithUser, method="function_calling")
+         .with_retry(stop_after_attempt=configurable.max_structured_output_retries)
+         .with_config(model_config)
+     )
+@@ -141,7 +141,7 @@ async def write_research_brief(state: AgentState, config: RunnableConfig) -> Com
+     # Configure model for structured research question generation
+     research_model = (
+         configurable_model
+-        .with_structured_output(ResearchQuestion)
++        .with_structured_output(ResearchQuestion, method="function_calling")
+         .with_retry(stop_after_attempt=configurable.max_structured_output_retries)
+         .with_config(research_model_config)
+     )
+@@ -716,4 +716,4 @@ deep_researcher_builder.add_edge("research_supervisor", "final_report_generation
+ deep_researcher_builder.add_edge("final_report_generation", END)                   # Final exit point
+ 
+ # Compile the complete deep researcher workflow
+-deep_researcher = deep_researcher_builder.compile()
+\ No newline at end of file
++deep_researcher = deep_researcher_builder.compile()
+diff --git a/src/open_deep_research/prompts.py b/src/open_deep_research/prompts.py
+index 1d9f5d9..a171edd 100644
+--- a/src/open_deep_research/prompts.py
++++ b/src/open_deep_research/prompts.py
+@@ -246,11 +246,11 @@ Here are the findings from the research that you conducted:
+ </Findings>
+ 
+ Please create a detailed answer to the overall research brief that:
+-1. Is well-organized with proper headings (# for title, ## for sections, ### for subsections)
+-2. Includes specific facts and insights from the research
+-3. References relevant sources using [Title](URL) format
++1. Follows any output format, schema, language, and field requirements explicitly specified in the research brief. If the research brief asks for JSON, return only valid JSON.
++2. Includes specific facts and insights from the research.
++3. References relevant sources using URLs in the format requested by the research brief. If no format is requested, use [Title](URL) format.
+ 4. Provides a balanced, thorough analysis. Be as comprehensive as possible, and include all information that is relevant to the overall research question. People are using you for deep research and will expect detailed, comprehensive answers.
+-5. Includes a "Sources" section at the end with all referenced links
++5. Includes sources in the form requested by the research brief. If no format is requested, include a "Sources" section at the end with all referenced links.
+ 
+ You can structure your report in a number of different ways. Here are some examples:
+ 
+@@ -293,7 +293,7 @@ REMEMBER:
+ The brief and research may be in English, but you need to translate this information to the right language when writing the final answer.
+ Make sure the final answer report is in the SAME language as the human messages in the message history.
+ 
+-Format the report in clear markdown with proper structure and include source references where appropriate.
++Use the user's requested format. Only use Markdown if the research brief does not specify another output format.
+ 
+ <Citation Rules>
+ - Assign each unique URL a single citation number in your text
+@@ -365,4 +365,4 @@ Example 2 (for a scientific article):
+ Remember, your goal is to create a summary that can be easily understood and utilized by a downstream research agent while preserving the most critical information from the original webpage.
+ 
+ Today's date is {date}.
+-"""
+\ No newline at end of file
++"""
+diff --git a/src/open_deep_research/utils.py b/src/open_deep_research/utils.py
+index 82ce304..6efe6f1 100644
+--- a/src/open_deep_research/utils.py
++++ b/src/open_deep_research/utils.py
+@@ -88,7 +88,7 @@ async def tavily_search(
+         max_tokens=configurable.summarization_model_max_tokens,
+         api_key=model_api_key,
+         tags=["langsmith:nostream"]
+-    ).with_structured_output(Summary).with_retry(
++    ).with_structured_output(Summary, method="function_calling").with_retry(
+         stop_after_attempt=configurable.max_structured_output_retries
+     )
+     
+@@ -212,6 +212,72 @@ async def summarize_webpage(model: BaseChatModel, webpage_content: str) -> str:
+         logging.warning(f"Summarization failed with error: {str(e)}, returning original content")
+         return webpage_content
+ 
++FIRECRAWL_SEARCH_DESCRIPTION = (
++    "A web search tool backed by Firecrawl. It returns search results with scraped "
++    "markdown content when available, including source URLs for citation."
++)
++
++@tool(description=FIRECRAWL_SEARCH_DESCRIPTION)
++async def firecrawl_search(
++    queries: List[str],
++    max_results: Annotated[int, InjectedToolArg] = 5,
++    config: RunnableConfig = None,
++) -> str:
++    """Fetch web search results from Firecrawl.
++
++    Args:
++        queries: List of search queries to execute.
++        max_results: Maximum number of results to return per query.
++        config: Runtime configuration.
++
++    Returns:
++        Formatted string containing search results and scraped markdown snippets.
++    """
++    try:
++        from firecrawl import FirecrawlApp
++    except ImportError:
++        return "Error: firecrawl-py is not installed."
++
++    api_key = os.environ.get("FIRECRAWL_API_KEY")
++    if not api_key:
++        return "Error: FIRECRAWL_API_KEY is not set."
++
++    client = FirecrawlApp(api_key=api_key)
++
++    async def run_search(query: str):
++        return await asyncio.to_thread(
++            client.search,
++            query,
++            limit=max_results,
++            scrape_options={"formats": ["markdown"]},
++        )
++
++    search_results = await asyncio.gather(*[run_search(query) for query in queries])
++
++    formatted_output = "Search results:\n\n"
++    source_index = 1
++    for query, response in zip(queries, search_results):
++        web_results = getattr(response, "web", None) or []
++        formatted_output += f"Query: {query}\n"
++        if not web_results:
++            formatted_output += "No results found.\n\n"
++            continue
++
++        for item in web_results:
++            metadata = getattr(item, "metadata", None)
++            title = getattr(metadata, "title", None) or getattr(item, "title", None) or "Untitled"
++            url = getattr(metadata, "url", None) or getattr(metadata, "source_url", None) or getattr(item, "url", None) or ""
++            description = getattr(metadata, "description", None) or getattr(item, "description", None) or ""
++            markdown = getattr(item, "markdown", None) or ""
++            content = markdown or description
++            formatted_output += f"\n--- SOURCE {source_index}: {title} ---\n"
++            formatted_output += f"URL: {url}\n\n"
++            formatted_output += f"CONTENT:\n{content[:8000]}\n\n"
++            formatted_output += "-" * 80 + "\n"
++            source_index += 1
++
++    return formatted_output
++
+ ##########################
+ # Reflection Tool Utils
+ ##########################
+@@ -558,6 +624,16 @@ async def get_search_tool(search_api: SearchAPI):
+             "name": "web_search"
+         }
+         return [search_tool]
++
++    elif search_api == SearchAPI.FIRECRAWL:
++        # Configure Firecrawl search tool with metadata
++        search_tool = firecrawl_search
++        search_tool.metadata = {
++            **(search_tool.metadata or {}),
++            "type": "search",
++            "name": "web_search",
++        }
++        return [search_tool]
+         
+     elif search_api == SearchAPI.NONE:
+         # No search functionality configured

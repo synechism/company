@@ -1,0 +1,32 @@
+{
+  "start": "2026-06-24T15:04:43Z",
+  "end": "2026-06-24T15:08:15Z",
+  "duration_seconds": 212.82,
+  "error": null,
+  "event_counts": {
+    "clarify_with_user": 1,
+    "write_research_brief": 1,
+    "research_supervisor": 1,
+    "final_report_generation": 1
+  },
+  "configurable": {
+    "thread_id": "fcdx-open-deep-research-kennedy-valve",
+    "allow_clarification": false,
+    "search_api": "firecrawl",
+    "max_concurrent_research_units": 1,
+    "max_researcher_iterations": 2,
+    "max_react_tool_calls": 4,
+    "research_model": "openai:deepseek-chat",
+    "research_model_max_tokens": 4096,
+    "compression_model": "openai:deepseek-chat",
+    "compression_model_max_tokens": 4096,
+    "final_report_model": "openai:deepseek-chat",
+    "final_report_model_max_tokens": 8192,
+    "summarization_model": "openai:deepseek-chat",
+    "summarization_model_max_tokens": 4096
+  },
+  "output_path": "/home/abhi/dataset/packages/deepresearch/results/water-valves/open-deep-research-reports/kennedy-valve-output.txt",
+  "output_chars": 17593,
+  "starts_with_json": true,
+  "contains_org_chart": true
+}

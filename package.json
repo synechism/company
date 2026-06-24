@@ -5,10 +5,12 @@
   "type": "module",
   "packageManager": "pnpm@10.24.0",
   "scripts": {
-    "build": "pnpm --filter @fcdx/cli build",
-    "check": "pnpm --filter @fcdx/cli check",
+    "build": "pnpm --filter @fcdx/cli build && pnpm --filter @fcdx/deepresearch build",
+    "check": "pnpm --filter @fcdx/cli check && pnpm --filter @fcdx/deepresearch check",
+    "deepresearch:api": "pnpm --filter @fcdx/deepresearch api",
     "deepresearch:prepare": "pnpm --filter @fcdx/deepresearch prepare:input",
     "deepresearch:check": "pnpm --filter @fcdx/deepresearch check",
+    "deepresearch:worker": "pnpm --filter @fcdx/deepresearch worker",
     "fcdx": "pnpm --filter @fcdx/cli fcdx",
     "install-fcdx": "pnpm --filter @fcdx/cli build && node scripts/install-fcdx.mjs"
   },

@@ -4,13 +4,20 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "api": "tsx src/api/server.ts",
     "build": "tsc",
     "check": "tsc --noEmit",
-    "prepare:input": "tsx src/build-deerflow-input.ts"
+    "prepare:input": "tsx src/build-research-input.ts",
+    "worker": "tsx src/api/worker.ts"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/node": "^24.10.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "bullmq": "^5.79.1",
+    "express": "^5.2.1"
   }
 }

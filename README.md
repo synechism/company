@@ -101,6 +101,8 @@ Common environment variables:
 - `UNIPILE_BASE_URL`: Unipile tenant DSN/base URL.
 - `UNIPILE_ACCESS_TOKEN`: Unipile API key.
 - `HUNTER_API_KEY`: Hunter API key for verified lead email lookup.
+- `API_URL`: deepresearch API URL used by `fcdx deepresearch`.
+- `REDIS_URL`: Redis URL used by the deepresearch API and workers.
 
 Do not commit `.env` files.
 
@@ -117,6 +119,7 @@ fcdx config env set FIRECRAWL_API_KEY fc-...
 fcdx config env set UNIPILE_BASE_URL https://api51.unipile.com:18107
 fcdx config env set UNIPILE_ACCESS_TOKEN <token>
 fcdx config env set HUNTER_API_KEY <token>
+fcdx config env set API_URL http://127.0.0.1:8787
 fcdx config env list
 ```
 
@@ -140,6 +143,13 @@ UNIPILE_ACCESS_TOKEN=...
 
 # Required for fcdx lead find-email
 HUNTER_API_KEY=...
+
+# Required for fcdx deepresearch commands
+API_URL=http://127.0.0.1:8787
+
+# Required for the deepresearch API/worker service
+REDIS_URL=redis://127.0.0.1:6379
+DEEPRESEARCH_RUNNER=open-deep-research
 ```
 
 You can also pass credentials for a single command:
@@ -420,6 +430,55 @@ fcdx lead find-email \
 
 fcdx list show --list water-valve-qualified --limit 10
 ```
+
+## Deep Research Jobs
+
+Deep research runs asynchronously through `packages/deepresearch`: the API
+accepts jobs, Redis/BullMQ stores the queue, and one or more workers claim jobs
+and write `report.txt` artifacts.
+
+Start Redis, then run the API and a worker in separate terminals:
+
+```bash
+pnpm deepresearch:api
+pnpm deepresearch:worker
+```
+
+Configure the installed CLI to point at the API:
+
+```bash
+fcdx config env set API_URL http://127.0.0.1:8787
+```
+
+Submit one prompt file:
+
+```bash
+fcdx deepresearch submit \
+  --prompt-file packages/deepresearch/results/water-valves/tasks/kennedy-valve-company-BFKJ7LbO.md
+```
+
+Submit one job per company in a list:
+
+```bash
+fcdx deepresearch submit-list \
+  --list water-valve-qualified \
+  --prompt-file packages/deepresearch/prompts/manufacturing-outreach-research.md \
+  --limit 5
+```
+
+Inspect or fetch a report:
+
+```bash
+fcdx deepresearch status --job-id <job_id>
+fcdx deepresearch wait --job-id <job_id> --output output/reports/company.txt
+fcdx deepresearch report --job-id <job_id>
+```
+
+Use `--runner stub` for cheap queue/API smoke tests. Use the default
+`open-deep-research` runner for real research.
+
+Implementation details and the runbook are documented in
+[docs/deepresearch-async-api.md](docs/deepresearch-async-api.md).
 
 ## Target Helpers
 

@@ -10,3 +10,4 @@ output/
 packages/fcdx/data/*.parquet
 !packages/fcdx/data/.gitkeep
 packages/deepresearch/external/
+packages/deepresearch/results/jobs/

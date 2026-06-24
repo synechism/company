@@ -68,7 +68,7 @@ function requiredValue(key: string, value: string | undefined): string {
 }
 
 function printHelp(): void {
-  console.log(`Prepare DeerFlow/Codex deep-research prompts from a shortlist CSV.
+  console.log(`Prepare runner-neutral deep-research prompts from a shortlist CSV.
 
 Usage:
   pnpm --filter @fcdx/deepresearch prepare:input -- [options]
@@ -280,8 +280,8 @@ async function main(): Promise<void> {
     rows: rows.length,
     outDir,
     manifest: path.join(outDir, "manifest.csv"),
-    deerflowJsonl: path.join(outDir, "tasks.jsonl"),
-    deerflowBatch: path.join(outDir, "batch.md"),
+    tasksJsonl: path.join(outDir, "tasks.jsonl"),
+    batch: path.join(outDir, "batch.md"),
     codexBaselinePrompt: path.join(outDir, "codex-baseline-prompt.md"),
   }, null, 2));
 }
@@ -318,13 +318,13 @@ Generated ${count} deep-research task(s).
 - \`batch.md\`: all tasks concatenated for agents that accept a single Markdown input
 - \`codex-baseline-prompt.md\`: first task only, intended for a quick fresh-Codex comparison
 
-## DeerFlow Usage
+## Runner Usage
 
-Use \`batch.md\` for a batch run if the configured DeerFlow instance supports long-context batch tasks. For a safer smoke test, feed one file from \`tasks/\` into DeerFlow first.
+Use \`batch.md\` for a batch run if the configured research runner supports long-context batch tasks. For a safer smoke test, feed one file from \`tasks/\` into the runner first.
 
 The intended comparison is:
 
-1. Run one company through DeerFlow and save the report under \`deerflow-reports/\`.
+1. Run one company through a research runner and save the report under a runner-specific folder.
 2. Run the same task through a fresh Codex agent and save the report under \`codex-baseline-reports/\`.
 3. Compare elapsed time, number of external searches/pages opened, and report quality for outreach usefulness.
 `;

@@ -79,6 +79,7 @@ import {
   type UnipileAccount,
   type LinkedinSearchProfile,
 } from "../unipile/client.js";
+import { DeepResearchApiError, DeepResearchClient, type DeepResearchSubmitOptions } from "../deepresearch/client.js";
 
 applyFcdxConfigEnv();
 
@@ -158,6 +159,7 @@ Examples:
             datasetPath: resolveDatasetPath(),
             parquetPath: resolveParquetPath(),
             firecrawlCacheDir: resolveFirecrawlCacheDir(),
+            deepresearchApiUrl: resolveDeepResearchApiUrl(),
           },
         },
         null,
@@ -233,6 +235,7 @@ Examples:
   fcdx config env set FIRECRAWL_API_KEY fc-...
   fcdx config env set UNIPILE_BASE_URL https://api51.unipile.com:18107
   fcdx config env set UNIPILE_ACCESS_TOKEN <token>
+  fcdx config env set API_URL http://127.0.0.1:8787
 `,
   )
   .action((name, value, options) => {
@@ -1932,6 +1935,219 @@ accept-all addresses stored.
     }
   });
 
+const deepresearch = program
+  .command("deepresearch")
+  .description("Submit and inspect asynchronous deep-research jobs")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx config env set API_URL http://127.0.0.1:8787
+  fcdx deepresearch submit --prompt-file packages/deepresearch/results/water-valves/tasks/kennedy-valve-company-BFKJ7LbO.md
+  fcdx deepresearch submit-list --list water-valve-qualified --prompt-file packages/deepresearch/prompts/manufacturing-outreach-research.md --limit 5
+  fcdx deepresearch status --job-id job_id_here
+  fcdx deepresearch report --job-id job_id_here --output output/reports/company.txt
+
+Subcommand options:
+  fcdx deepresearch submit --help
+  fcdx deepresearch submit-list --help
+  fcdx deepresearch status --help
+  fcdx deepresearch wait --help
+  fcdx deepresearch report --help
+`,
+  );
+
+deepresearch
+  .command("submit")
+  .description("Submit one prompt to the deepresearch API queue")
+  .option("--api-url <url>", "Deepresearch API URL; defaults to config env API_URL", resolveDeepResearchApiUrl())
+  .option("--job-id <id>", "Optional deterministic job id")
+  .option("--prompt <text>", "Prompt text to submit")
+  .option("--prompt-file <path>", "Prompt file to submit")
+  .option("--metadata-json <json>", "Optional JSON metadata stored on the job")
+  .option("--runner <name>", "Runner: open-deep-research or stub")
+  .option("--search-api <name>", "Search backend for Open Deep Research, e.g. firecrawl")
+  .option("--model <model>", "Research model, e.g. openai:deepseek-chat")
+  .option("--max-concurrent-research-units <n>", "Open Deep Research concurrency", parseIntArg)
+  .option("--max-researcher-iterations <n>", "Open Deep Research supervisor iterations", parseIntArg)
+  .option("--max-react-tool-calls <n>", "Open Deep Research tool-call budget", parseIntArg)
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx deepresearch submit --prompt-file packages/deepresearch/results/water-valves/tasks/kennedy-valve-company-BFKJ7LbO.md
+  fcdx deepresearch submit --prompt "Research Kennedy Valve for procurement outreach" --metadata-json '{"company":"kennedy valve"}'
+  fcdx deepresearch submit --prompt-file /tmp/task.md --runner stub
+
+The API URL is read from --api-url, then config env API_URL, then
+http://127.0.0.1:8787.
+`,
+  )
+  .action(async (options) => {
+    try {
+      const client = createDeepResearchClient(options.apiUrl);
+      const prompt = await readPromptOption(options);
+      const response = await client.submit({
+        jobId: options.jobId,
+        prompt,
+        metadata: parseJsonOption(options.metadataJson) as Record<string, unknown> | undefined,
+        options: deepResearchSubmitOptions(options),
+      });
+      console.log(JSON.stringify(response, null, 2));
+    } catch (error) {
+      exitWithError(error);
+    }
+  });
+
+deepresearch
+  .command("submit-list")
+  .description("Submit one deepresearch job per company in a durable list")
+  .requiredOption("--list <name>", "List name")
+  .option("--db <path>", "DuckDB path", resolveDbPath())
+  .option("--api-url <url>", "Deepresearch API URL; defaults to config env API_URL", resolveDeepResearchApiUrl())
+  .option("--prompt <text>", "Prompt template text; company context is appended")
+  .option("--prompt-file <path>", "Prompt template file; company context is appended")
+  .option("--limit <n>", "Maximum list members to submit", parseIntArg)
+  .option("--metadata-json <json>", "Optional JSON metadata merged into every job")
+  .option("--runner <name>", "Runner: open-deep-research or stub")
+  .option("--search-api <name>", "Search backend for Open Deep Research, e.g. firecrawl")
+  .option("--model <model>", "Research model, e.g. openai:deepseek-chat")
+  .option("--max-concurrent-research-units <n>", "Open Deep Research concurrency", parseIntArg)
+  .option("--max-researcher-iterations <n>", "Open Deep Research supervisor iterations", parseIntArg)
+  .option("--max-react-tool-calls <n>", "Open Deep Research tool-call budget", parseIntArg)
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx deepresearch submit-list --list water-valve-qualified --prompt-file packages/deepresearch/prompts/manufacturing-outreach-research.md --limit 3
+  fcdx deepresearch submit-list --list targets --prompt "Research this company for Cronwell outreach" --runner stub
+
+Each job receives the prompt template plus the company row, list membership
+metadata, tags, and list-local fields from DuckDB.
+`,
+  )
+  .action(async (options) => {
+    const { instance, connection } = await connectFcdxDb(options.db);
+    try {
+      const client = createDeepResearchClient(options.apiUrl);
+      const template = await readPromptOption(options);
+      const metadata = parseJsonOption(options.metadataJson) as Record<string, unknown> | undefined;
+      const listData = await showList(connection, { listName: options.list, limit: options.limit });
+      const submitted: Array<Record<string, unknown>> = [];
+      for (const member of listData.members) {
+        const response = await client.submit({
+          prompt: buildListDeepResearchPrompt(template, member),
+          metadata: {
+            ...(metadata ?? {}),
+            list: listData.list.name,
+            company_id: member.company.id,
+            company_name: member.company.name,
+            website: member.company.website,
+          },
+          options: deepResearchSubmitOptions(options),
+        });
+        submitted.push({
+          company_id: member.company.id,
+          company_name: member.company.name,
+          ...response,
+        });
+      }
+      console.log(JSON.stringify({ list: listData.list.name, jobs: submitted.length, submitted }, null, 2));
+    } catch (error) {
+      exitWithError(error);
+    } finally {
+      connection.closeSync();
+      instance.closeSync();
+    }
+  });
+
+deepresearch
+  .command("status")
+  .description("Fetch deepresearch job status from the API")
+  .requiredOption("--job-id <id>", "Job id returned by fcdx deepresearch submit")
+  .option("--api-url <url>", "Deepresearch API URL; defaults to config env API_URL", resolveDeepResearchApiUrl())
+  .addHelpText(
+    "after",
+    `
+Example:
+  fcdx deepresearch status --job-id job_id_here
+`,
+  )
+  .action(async (options) => {
+    try {
+      const client = createDeepResearchClient(options.apiUrl);
+      console.log(JSON.stringify(await client.status(options.jobId), null, 2));
+    } catch (error) {
+      exitWithError(error);
+    }
+  });
+
+deepresearch
+  .command("wait")
+  .description("Poll a deepresearch job until completion, then print or save report.txt")
+  .requiredOption("--job-id <id>", "Job id returned by fcdx deepresearch submit")
+  .option("--api-url <url>", "Deepresearch API URL; defaults to config env API_URL", resolveDeepResearchApiUrl())
+  .option("-o, --output <path>", "Optional path to write report.txt")
+  .option("--timeout-ms <n>", "Maximum wait time", parseIntArg, 900_000)
+  .option("--poll-ms <n>", "Polling interval", parseIntArg, 5000)
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx deepresearch wait --job-id job_id_here
+  fcdx deepresearch wait --job-id job_id_here --output output/reports/company.txt --timeout-ms 1800000
+`,
+  )
+  .action(async (options) => {
+    try {
+      const client = createDeepResearchClient(options.apiUrl);
+      await waitForDeepResearchJob(client, options.jobId, {
+        timeoutMs: options.timeoutMs,
+        pollMs: options.pollMs,
+      });
+      const report = await client.report(options.jobId);
+      if (options.output) {
+        await fs.mkdir(path.dirname(options.output), { recursive: true });
+        await fs.writeFile(options.output, report, "utf8");
+        console.log(JSON.stringify({ jobId: options.jobId, output: options.output, bytes: report.length }, null, 2));
+      } else {
+        console.log(report);
+      }
+    } catch (error) {
+      exitWithError(error);
+    }
+  });
+
+deepresearch
+  .command("report")
+  .description("Fetch report.txt for a completed deepresearch job")
+  .requiredOption("--job-id <id>", "Job id returned by fcdx deepresearch submit")
+  .option("--api-url <url>", "Deepresearch API URL; defaults to config env API_URL", resolveDeepResearchApiUrl())
+  .option("-o, --output <path>", "Optional path to write report.txt")
+  .addHelpText(
+    "after",
+    `
+Examples:
+  fcdx deepresearch report --job-id job_id_here
+  fcdx deepresearch report --job-id job_id_here --output output/reports/company.txt
+`,
+  )
+  .action(async (options) => {
+    try {
+      const client = createDeepResearchClient(options.apiUrl);
+      const report = await client.report(options.jobId);
+      if (options.output) {
+        await fs.mkdir(path.dirname(options.output), { recursive: true });
+        await fs.writeFile(options.output, report, "utf8");
+        console.log(JSON.stringify({ jobId: options.jobId, output: options.output, bytes: report.length }, null, 2));
+      } else {
+        console.log(report);
+      }
+    } catch (error) {
+      exitWithError(error);
+    }
+  });
+
 const target = program
   .command("target")
   .description("Target-category comparison and shortlist commands")
@@ -2134,6 +2350,108 @@ Examples:
   });
 
 await program.parseAsync(process.argv);
+
+function createDeepResearchClient(apiUrl?: string): DeepResearchClient {
+  return new DeepResearchClient(apiUrl || resolveDeepResearchApiUrl());
+}
+
+function resolveDeepResearchApiUrl(explicitUrl?: string): string {
+  return (
+    explicitUrl ||
+    resolveConfigEnv("API_URL") ||
+    resolveConfigEnv("FCDX_DEEPRESEARCH_API_URL") ||
+    resolveConfigEnv("DEEPRESEARCH_API_URL") ||
+    "http://127.0.0.1:8787"
+  );
+}
+
+async function readPromptOption(options: { prompt?: string; promptFile?: string }): Promise<string> {
+  if (options.prompt && options.promptFile) throw new Error("Provide either --prompt or --prompt-file, not both");
+  if (options.prompt) return options.prompt;
+  if (options.promptFile) return fs.readFile(options.promptFile, "utf8");
+  throw new Error("Provide --prompt or --prompt-file");
+}
+
+function deepResearchSubmitOptions(options: {
+  runner?: string;
+  searchApi?: string;
+  model?: string;
+  maxConcurrentResearchUnits?: number;
+  maxResearcherIterations?: number;
+  maxReactToolCalls?: number;
+}): DeepResearchSubmitOptions | undefined {
+  if (options.runner && options.runner !== "open-deep-research" && options.runner !== "stub") {
+    throw new Error("--runner must be open-deep-research or stub");
+  }
+  const result: DeepResearchSubmitOptions = {
+    runner: options.runner as DeepResearchSubmitOptions["runner"],
+    searchApi: options.searchApi,
+    model: options.model,
+    maxConcurrentResearchUnits: options.maxConcurrentResearchUnits,
+    maxResearcherIterations: options.maxResearcherIterations,
+    maxReactToolCalls: options.maxReactToolCalls,
+  };
+  const cleaned = Object.fromEntries(Object.entries(result).filter(([, value]) => value !== undefined)) as DeepResearchSubmitOptions;
+  return Object.keys(cleaned).length ? cleaned : undefined;
+}
+
+function buildListDeepResearchPrompt(
+  template: string,
+  member: Awaited<ReturnType<typeof showList>>["members"][number],
+): string {
+  const company = member.company;
+  const companyContext: Record<string, unknown> = {
+    id: company.id,
+    name: company.name,
+    website: company.website,
+    url: company.url,
+    industry: company.industry,
+    size: company.size,
+    country: company.country,
+    region: company.region,
+    locality: company.locality,
+    linkedin_url: company.linkedinUrl,
+    founded: company.founded,
+    list_membership: {
+      source: member.source,
+      reason: member.reason,
+      rank: member.rank,
+      score: member.score,
+    },
+    tags: member.tags,
+    list_fields: member.fields,
+  };
+  return `${template.trim()}
+
+## Company Input
+
+\`\`\`json
+${JSON.stringify(companyContext, null, 2)}
+\`\`\`
+`;
+}
+
+async function waitForDeepResearchJob(
+  client: DeepResearchClient,
+  jobId: string,
+  options: { timeoutMs: number; pollMs: number },
+): Promise<Record<string, unknown>> {
+  const started = Date.now();
+  while (Date.now() - started <= options.timeoutMs) {
+    const status = await client.status(jobId);
+    const state = String(status.state ?? "");
+    if (state === "completed") return status;
+    if (state === "failed") {
+      throw new Error(`Deepresearch job failed: ${String(status.failed_reason ?? "unknown reason")}`);
+    }
+    await sleep(options.pollMs);
+  }
+  throw new Error(`Timed out waiting for deepresearch job ${jobId}`);
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function createUnipileClient(options: { baseUrl?: string; accessToken?: string }): UnipileClient {
   const baseUrl = options.baseUrl || resolveConfigEnv("UNIPILE_BASE_URL");
@@ -2684,6 +3002,9 @@ function exitWithError(error: unknown): never {
       console.error("Hint: verify UNIPILE_BASE_URL is the tenant DSN from the Unipile dashboard and that the API workspace is active.");
     }
   } else if (error instanceof HunterApiError) {
+    console.error(error.message);
+    console.error(JSON.stringify(error.body, null, 2));
+  } else if (error instanceof DeepResearchApiError) {
     console.error(error.message);
     console.error(JSON.stringify(error.body, null, 2));
   } else if (error instanceof AmbiguousCompanyMatchError) {
