@@ -61,6 +61,10 @@ Start Redis first. Then run the API and at least one worker from the repo root:
 pnpm dev
 ```
 
+The dev launcher fills in local defaults such as
+`API_URL=http://127.0.0.1:8787` and `REDIS_URL=redis://127.0.0.1:6379` when they
+are not already set.
+
 For stubbed queue/API testing:
 
 ```bash

@@ -445,6 +445,11 @@ Start Redis, then run the API and a worker together from the repo root:
 pnpm dev
 ```
 
+`pnpm dev` sets local defaults for the service, including
+`API_URL=http://127.0.0.1:8787`, if you have not configured them yet. The
+regular `fcdx` CLI still works without the deepresearch service; only
+`fcdx deepresearch ...` commands need the API to be running.
+
 For a cheap local queue smoke test that never launches the real research model:
 
 ```bash

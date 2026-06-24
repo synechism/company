@@ -430,6 +430,13 @@ Run the service processes together:
 pnpm dev
 ```
 
+The dev launcher sets local defaults for unset service env values, including
+`API_URL`, `DEEPRESEARCH_PUBLIC_URL`, `DEEPRESEARCH_API_HOST`,
+`DEEPRESEARCH_API_PORT`, and `REDIS_URL`. This means the API and worker can boot
+for local development before a user has added those values to the FCD-X config.
+The standalone `fcdx` CLI remains usable even when the deepresearch service is
+not running; only deepresearch subcommands need the API.
+
 For a no-model smoke-test mode:
 
 ```bash
