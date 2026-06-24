@@ -1,0 +1,78 @@
+{
+  "company": "Kennedy Valve Company",
+  "fit_score": 5,
+  "fit_reason": "Strong fit: Kennedy Valve is a real U.S. manufacturer of waterworks, fire-protection, hydrant and valve products, with foundry, machining, assembly, engineering, quality, MRP/MPS planning, and recent supplier-cost and planning-pressure signals.",
+  "manufacturing_profile": "Kennedy Valve, part of McWane, manufactures fire hydrants, iHydrant monitoring products, resilient/double/rotating/solid wedge gate valves, butterfly valves, check valves, eccentric plug valves, in-plant valves, accessories, and UL-FM fire products. Its catalog appears high-SKU/high-variant: the website lists hydrant and gate-valve result sets, and McWane says Kennedy manufactures a complete line from its Elmira, NY facility for waterworks, potable/wastewater treatment, and fire-protection markets. Public job posts describe the site as a gray and ductile iron foundry plus computerized machining and assembly operation; ISO scope covers design and manufacture of gray/ductile iron castings for hydrants, indicator posts, check, gate, butterfly valves, and components.",
+  "recent_triggers": [
+    {
+      "trigger": "Supplier-cost driven price increases on Kennedy Valve XBFV, resilient wedge gate valves, indicator/wall posts, and check valves",
+      "date": "2026-02",
+      "why_it_matters": "A distributor notice cited escalating supplier costs and 3-5% Kennedy price increases effective April 25, 2026, which is directly relevant to procurement automation, supplier tracking, and cost-change workflows.",
+      "source_url": "https://www.vikinggroupinc.com/sites/default/files/2026-02/VSN%20Pricing%20Announcement%20-%20Kennedy%20Valve%20-%20Talco%20Fire%20Systems.pdf"
+    },
+    {
+      "trigger": "Hiring for Value Stream Material & Production Planner",
+      "date": "2026-06",
+      "why_it_matters": "The role owns MPS/MRP execution, material availability, shortage recovery, schedule adherence, and recovery after production disruptions; this is a clean signal that planning/procurement coordination is operationally important.",
+      "source_url": "https://www.theladders.com/job/kennedy-valve-value-stream-material-production-planner-mcwane-elmira-ny_87200945"
+    },
+    {
+      "trigger": "ISO 9001:2015 certificate renewed/certified June 9, 2026",
+      "date": "2026-06",
+      "why_it_matters": "The scope covers design/manufacture of castings and valve/hydrant components, suggesting quality-controlled supplier and production records where procurement-agent audit trails could matter.",
+      "source_url": "https://kennedyvalve.com/upl/downloads/content-blocks/iso-9001-2015-2-certificate-qc.pdf"
+    },
+    {
+      "trigger": "U.S. Rep. Nick Langworthy visited Kennedy Valve after moving district office to Elmira",
+      "date": "2026-06",
+      "why_it_matters": "The company was publicly framed as one of the area's largest employers and an economic catalyst, reinforcing the scale and visibility of its Elmira manufacturing operation.",
+      "source_url": "https://www.kennedyvalve.com/communications/news-articles/kennedy-valves-welcomes-u-s-representative-nick-langworthy/"
+    }
+  ],
+  "recommended_contact": {
+    "name": "Chris McCutcheon, CMRP",
+    "title": "Supply Chain Director",
+    "email": "chris.mccutcheon@kennedyvalve.com",
+    "linkedin_url": "https://www.linkedin.com/in/chris-mccutcheon-cmrp-04973865?miniProfileUrn=urn%3Ali%3Afs_miniProfile%3AACoAAA3QDTkBDEMWBS8sbBkYTaW3l7cEUh0xs70",
+    "why_this_person": "Best primary buyer: public org data lists Chris as Supply Chain Director, and the current planning/supplier-cost triggers sit squarely in supply chain, MRP, material availability, and shortage recovery."
+  },
+  "outreach_angle": "Cronwell should lead with Kennedy's current material-planning pressure: a high-variant valve/hydrant catalog, foundry-machining-assembly operations, 2026 supplier-cost price movement, and active MRP/MPS planning hires. Position agents as a way to keep supplier price changes, shortage recovery, material readiness, and PO follow-up synchronized before they disrupt production schedules.",
+  "open_questions": [
+    "Which ERP/MRP system Kennedy Valve uses and whether purchasing is centralized at Kennedy, McWane Valve & Hydrant, or McWane corporate.",
+    "How much direct spend is castings, machined components, coatings, rubber/elastomers, fasteners, sensors, packaging, and MRO.",
+    "Whether Chris McCutcheon owns sourcing decisions directly or influences alongside plant GM, finance, and value-stream leaders."
+  ],
+  "sources": [
+    {
+      "title": "Kennedy Valve Company homepage",
+      "url": "https://www.kennedyvalve.com/",
+      "date": "2026-06-22 crawled"
+    },
+    {
+      "title": "Kennedy Valve products page",
+      "url": "https://www.kennedyvalve.com/products/",
+      "date": "2026-06-23 crawled"
+    },
+    {
+      "title": "McWane Kennedy Valve overview",
+      "url": "https://pe.mcwane.com/groups/valve-hydrant/kennedy-valve",
+      "date": "2026-06-21 crawled"
+    },
+    {
+      "title": "Viking SupplyNet pricing announcement for Kennedy Valve and Talco",
+      "url": "https://www.vikinggroupinc.com/sites/default/files/2026-02/VSN%20Pricing%20Announcement%20-%20Kennedy%20Valve%20-%20Talco%20Fire%20Systems.pdf",
+      "date": "2026-02-04"
+    },
+    {
+      "title": "Kennedy Valve Value Stream Material & Production Planner posting",
+      "url": "https://www.theladders.com/job/kennedy-valve-value-stream-material-production-planner-mcwane-elmira-ny_87200945",
+      "date": "2026-06 approximate"
+    },
+    {
+      "title": "Kennedy Valve ISO 9001:2015 certificate",
+      "url": "https://kennedyvalve.com/upl/downloads/content-blocks/iso-9001-2015-2-certificate-qc.pdf",
+      "date": "2026-06-09"
+    }
+  ],
+  "baseline_note": "Approximate elapsed time reported by fresh Codex agent: 15 minutes. Limitations: LinkedIn profile/email were not independently accessed beyond the provided lead data and public contact-directory snippets; private ERP, spend, supplier count, and procurement org structure remain unverified."
+}

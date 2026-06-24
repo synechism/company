@@ -7,6 +7,8 @@
   "scripts": {
     "build": "pnpm --filter @fcdx/cli build",
     "check": "pnpm --filter @fcdx/cli check",
+    "deepresearch:prepare": "pnpm --filter @fcdx/deepresearch prepare:input",
+    "deepresearch:check": "pnpm --filter @fcdx/deepresearch check",
     "fcdx": "pnpm --filter @fcdx/cli fcdx",
     "install-fcdx": "pnpm --filter @fcdx/cli build && node scripts/install-fcdx.mjs"
   },

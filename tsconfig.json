@@ -1,6 +1,7 @@
 {
   "files": [],
   "references": [
-    { "path": "./packages/fcdx" }
+    { "path": "./packages/fcdx" },
+    { "path": "./packages/deepresearch" }
   ]
 }
